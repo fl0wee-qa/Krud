@@ -11,6 +11,7 @@
     "dev:web": "npm run dev --workspace @krud/web",
     "dev:api": "npm run start:dev --workspace @krud/api",
     "dev": "npm run dev:web",
+    "build:web": "npm run build --workspace @krud/web",
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

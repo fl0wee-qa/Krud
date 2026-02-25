@@ -81,6 +81,12 @@ Build command:
 npm run build
 ```
 
+If you deploy from repo root instead of `apps/web`, set build command to:
+
+```bash
+npm run build:web
+```
+
 Required environment variables:
 
 - `NEXT_PUBLIC_API_URL=https://<your-api-domain>/api`
