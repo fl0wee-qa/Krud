@@ -1,4 +1,5 @@
 # Krud
+[![Krud CI](https://github.com/fl0wee-qa/Krud/actions/workflows/ci.yml/badge.svg)](https://github.com/fl0wee-qa/Krud/actions/workflows/ci.yml)
 
 Krud is a modern QA test and bug management platform inspired by Jira, TestRail, and Linear.
 
