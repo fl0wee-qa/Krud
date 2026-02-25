@@ -1,0 +1,12 @@
+{
+  "name": "@krud/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "echo \"shared package is source-only\"",
+    "lint": "echo \"shared package lint skipped\"",
+    "test": "echo \"shared package tests skipped\""
+  }
+}

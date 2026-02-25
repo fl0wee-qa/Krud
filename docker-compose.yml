@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: krud-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: krud
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - krud-postgres-data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: krud-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/krud
+      JWT_SECRET: change-me
+      JWT_REFRESH_SECRET: change-me-too
+      JWT_ACCESS_TTL: 900
+      JWT_REFRESH_TTL: 604800
+      SLACK_MODE: mock
+      GIT_MODE: links
+    depends_on:
+      - postgres
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: krud-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  krud-postgres-data:

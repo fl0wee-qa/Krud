@@ -1,0 +1,27 @@
+{
+  "name": "krud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Krud QA test and bug management platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @krud/web",
+    "dev:api": "npm run start:dev --workspace @krud/api",
+    "dev": "npm run dev:web",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "db:generate": "prisma generate --schema apps/api/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema apps/api/prisma/schema.prisma --name init",
+    "db:seed": "npm run prisma:seed --workspace @krud/api"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.1",
+    "prisma": "^6.15.0",
+    "typescript": "^5.9.2"
+  }
+}
