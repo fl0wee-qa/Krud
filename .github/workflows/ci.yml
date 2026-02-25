@@ -26,6 +26,10 @@ env:
   DEVELOPER_PASSWORD: Developer12345!
   E2E_API_URL: http://localhost:3001/api
   E2E_API_HEALTH_URL: http://localhost:3001/api/health
+  E2E_BASE_URL: http://localhost:3000
+  NEXT_PUBLIC_API_URL: http://localhost:3001/api
+  E2E_SLACK_MODE: mock
+  E2E_GIT_MODE: links
 
 jobs:
   lint_build:
@@ -86,7 +90,7 @@ jobs:
         run: npm run db:generate
 
       - name: Run migrations
-        run: npm run db:migrate
+        run: npm run db:deploy
 
       - name: Seed admin user
         run: npm run db:seed

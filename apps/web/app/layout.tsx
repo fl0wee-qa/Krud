@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Sora } from "next/font/google";
+import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const sora = Sora({
-  variable: "--font-sora",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-sans",
   subsets: [
     "latin"
   ]
 });
 
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: [
     "latin"
   ],
@@ -31,8 +31,8 @@ export default function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${sora.variable} ${plexMono.variable}`}>
-      <body style={{ fontFamily: "var(--font-sora)" }}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${jetBrainsMono.variable}`}>
+      <body className="antialiased" style={{ fontFamily: "var(--font-sans)" }}>
         <Providers>{children}</Providers>
       </body>
     </html>

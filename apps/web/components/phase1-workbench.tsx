@@ -1,10 +1,30 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, ShieldCheck, TestTube2 } from "lucide-react";
+import { usePathname } from "next/navigation";
+import {
+  AlertCircle,
+  Bug as BugIcon,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  FolderKanban,
+  GitBranch,
+  LayoutDashboard,
+  Link2,
+  MoonStar,
+  ScrollText,
+  ShieldCheck,
+  SunMedium,
+  TestTube2,
+  UserRound
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { api, ApiError, AuthUser, BoardColumn, Bug, Project, Sprint, TestCase, TestRun, User } from "@/lib/api";
+import { IntegrationsPanel } from "@/components/workbench/panels/integrations-panel";
+import { ProjectsPanel } from "@/components/workbench/panels/projects-panel";
+import { SessionPanel } from "@/components/workbench/panels/session-panel";
+import { api, ApiError, AuthUser, BoardColumn, Bug, Project, Specification, Sprint, TestCase, TestRun, User } from "@/lib/api";
 import { useUiStore } from "@/lib/ui-store";
 
 const loginSchema = z.object({
@@ -70,14 +90,21 @@ const boardColumnSchema = z.object({
 
 const TOKEN_KEY = "krud-access-token";
 const USER_KEY = "krud-user";
+type WorkspaceSection = "overview" | "projects" | "bugs" | "agile" | "tests" | "specs" | "integrations";
 
-export function Phase1Workbench() {
+type Phase1WorkbenchProps = {
+  initialSection?: WorkspaceSection;
+  focused?: boolean;
+};
+
+export function Phase1Workbench({ initialSection = "overview", focused = false }: Phase1WorkbenchProps) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [loginEmail, setLoginEmail] = useState("admin@krud.local");
-  const [loginPassword, setLoginPassword] = useState("Admin12345!");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   const [projectName, setProjectName] = useState("");
   const [projectKey, setProjectKey] = useState("");
@@ -119,6 +146,10 @@ export function Phase1Workbench() {
   const [selectedBoardBugId, setSelectedBoardBugId] = useState("");
   const [selectedBoardColumnId, setSelectedBoardColumnId] = useState("");
   const [selectedMoveSprintId, setSelectedMoveSprintId] = useState("");
+  const [specTitle, setSpecTitle] = useState("Authentication rules");
+  const [specMarkdown, setSpecMarkdown] = useState("## Auth\n- User logs in with email/password\n- Access token required");
+  const [selectedSpecId, setSelectedSpecId] = useState("");
+  const [specUpdateMarkdown, setSpecUpdateMarkdown] = useState("## Auth v2\n- Add refresh flow and audit notes");
 
   const [projectSuccess, setProjectSuccess] = useState<string | null>(null);
   const [bugSuccess, setBugSuccess] = useState<string | null>(null);
@@ -133,9 +164,15 @@ export function Phase1Workbench() {
   const [runSuccess, setRunSuccess] = useState<string | null>(null);
   const [execResultSuccess, setExecResultSuccess] = useState<"PASS" | "FAIL" | "BLOCKED" | null>(null);
   const [execLinkedBugId, setExecLinkedBugId] = useState<string | null>(null);
+  const [specCreatedId, setSpecCreatedId] = useState<string | null>(null);
+  const [specUpdatedId, setSpecUpdatedId] = useState<string | null>(null);
 
   const theme = useUiStore((state) => state.theme);
   const toggleTheme = useUiStore((state) => state.toggleTheme);
+  const collapsedSidebar = useUiStore((state) => state.collapsedSidebar);
+  const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>("overview");
+  const pathname = usePathname();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -151,6 +188,7 @@ export function Phase1Workbench() {
         window.localStorage.removeItem(USER_KEY);
       }
     }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -162,6 +200,12 @@ export function Phase1Workbench() {
     }
   }, [
     theme
+  ]);
+
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [
+    initialSection
   ]);
 
   const healthQuery = useQuery({ queryKey: [ "health" ], queryFn: api.health });
@@ -198,6 +242,16 @@ export function Phase1Workbench() {
   const columnsQuery = useQuery({
     queryKey: [ "columns", token, selectedProjectId ],
     queryFn: () => api.listBoardColumns(token as string, selectedProjectId),
+    enabled: Boolean(token && selectedProjectId)
+  });
+  const specsQuery = useQuery({
+    queryKey: [ "specs", token, selectedProjectId ],
+    queryFn: () => api.listSpecs(token as string, selectedProjectId),
+    enabled: Boolean(token && selectedProjectId)
+  });
+  const specCoverageQuery = useQuery({
+    queryKey: [ "specs-coverage", token, selectedProjectId ],
+    queryFn: () => api.getSpecCoverage(token as string, selectedProjectId),
     enabled: Boolean(token && selectedProjectId)
   });
 
@@ -322,16 +376,115 @@ export function Phase1Workbench() {
   ]);
 
   useEffect(() => {
+    if (!specsQuery.data || specsQuery.data.length === 0) {
+      setSelectedSpecId("");
+      return;
+    }
+    const current = specsQuery.data.find((item) => item.id === selectedSpecId) ?? specsQuery.data[0];
+    if (current.id !== selectedSpecId) {
+      setSelectedSpecId(current.id);
+    }
+    setSpecUpdateMarkdown(current.markdown);
+  }, [
+    specsQuery.data,
+    selectedSpecId
+  ]);
+
+  useEffect(() => {
     setBugQueryResults([]);
     setSelectedBoardColumnId("");
     setSelectedMoveSprintId("");
     setSelectedBoardBugId("");
+    setSelectedSpecId("");
+    setSpecCreatedId(null);
+    setSpecUpdatedId(null);
   }, [
     selectedProjectId
   ]);
 
-  const panel = theme === "light" ? "bg-white/85 text-slate" : "bg-slate/70 text-slate-100";
-  const input = theme === "light" ? "border-slate/20 bg-white text-slate" : "border-slate-100/20 bg-slate/30 text-slate-100";
+  const panel = theme === "light"
+    ? "border border-slate-200/80 bg-white/90 text-slate-900 shadow-[0_22px_40px_-34px_rgba(15,23,42,0.7)] backdrop-blur-xl"
+    : "border border-slate-700/60 bg-slate-900/70 text-slate-100 shadow-[0_30px_58px_-40px_rgba(0,0,0,0.85)] backdrop-blur-xl";
+  const input = theme === "light"
+    ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#1f883d] focus:outline-none focus:ring-2 focus:ring-[#1f883d]/20"
+    : "border-slate-700 bg-slate-900/80 text-slate-100 placeholder:text-slate-400 focus:border-[#2ea043] focus:outline-none focus:ring-2 focus:ring-[#2ea043]/25";
+  const primaryButton = "inline-flex items-center justify-center rounded-lg bg-[#1f883d] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a7f37] disabled:cursor-not-allowed disabled:opacity-60";
+  const ghostButton = theme === "light"
+    ? "inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-100"
+    : "inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:bg-slate-800";
+  const sidebarToggleButton = theme === "light"
+    ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+    : "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-200 transition hover:bg-slate-800";
+  const statusBadge = theme === "light"
+    ? "rounded-lg border border-slate-200 bg-slate-100/80 px-2.5 py-1 text-xs font-medium text-slate-700"
+    : "rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-medium text-slate-200";
+  const sectionTitle = "mb-4 text-base font-semibold tracking-tight md:text-lg";
+  const navItems: Array<{ id: WorkspaceSection; label: string; icon: typeof LayoutDashboard; href: string }> = [
+    { id: "overview" as const, label: "Overview", icon: LayoutDashboard, href: "/" },
+    { id: "projects" as const, label: "Projects", icon: FolderKanban, href: "/projects" },
+    { id: "bugs" as const, label: "Bugs", icon: BugIcon, href: "/bugs" },
+    { id: "agile" as const, label: "Agile", icon: GitBranch, href: "/agile" },
+    { id: "tests" as const, label: "Testing", icon: TestTube2, href: "/tests" },
+    { id: "specs" as const, label: "Specs", icon: ScrollText, href: "/specs" },
+    { id: "integrations" as const, label: "Integrations", icon: Link2, href: "/integrations" }
+  ];
+  const endpointGroups = [
+    { label: "Auth", endpoint: "POST /auth/login" },
+    { label: "Projects", endpoint: "GET/POST /projects" },
+    { label: "Bugs", endpoint: "GET/POST/PATCH /bugs" },
+    { label: "Tests", endpoint: "POST /tests/cases, /tests/runs" },
+    { label: "Agile", endpoint: "POST /agile/sprints, /agile/columns" },
+    { label: "Specs", endpoint: "GET/POST/PATCH /specs" },
+    { label: "Query", endpoint: "POST /query/bugs" }
+  ];
+  const sectionFromPath = ((): WorkspaceSection | null => {
+    const routeMap: Record<string, WorkspaceSection> = {
+      "/": "overview",
+      "/projects": "projects",
+      "/bugs": "bugs",
+      "/agile": "agile",
+      "/tests": "tests",
+      "/specs": "specs",
+      "/integrations": "integrations"
+    };
+    return routeMap[pathname] ?? null;
+  })();
+  const activeNavSection = sectionFromPath ?? activeSection;
+  const focusMode = focused || Boolean(sectionFromPath && sectionFromPath !== "overview");
+  const showSection = (section: WorkspaceSection) => !focusMode || activeNavSection === section;
+  const sectionClass = (section: WorkspaceSection, base: string) => `${base} ${showSection(section) ? "" : "hidden"}`;
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    if (focusMode && !user) {
+      window.location.href = "/";
+    }
+  }, [
+    focusMode,
+    hydrated,
+    user
+  ]);
+
+  const navButton = (id: WorkspaceSection) => theme === "light"
+    ? `inline-flex items-center rounded-lg border text-xs font-semibold uppercase tracking-wide transition ${
+      collapsedSidebar ? "h-11 w-11 justify-center px-0 py-0" : "w-full justify-start gap-2 px-3 py-2"
+    } ${
+      activeNavSection === id
+        ? "border-[#1f883d]/50 bg-[#1f883d]/10 text-[#1f883d]"
+        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+    }`
+    : `inline-flex items-center rounded-lg border text-xs font-semibold uppercase tracking-wide transition ${
+      collapsedSidebar ? "h-11 w-11 justify-center px-0 py-0" : "w-full justify-start gap-2 px-3 py-2"
+    } ${
+      activeNavSection === id
+        ? "border-[#2ea043]/60 bg-[#2ea043]/20 text-[#8ddb95]"
+        : "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+    }`;
+  const workspaceGridClass = collapsedSidebar
+    ? "grid gap-4 md:grid-cols-[88px_1fr] md:gap-5"
+    : "grid gap-4 md:grid-cols-[260px_1fr] md:gap-5";
 
   const loginMutation = useMutation({
     mutationFn: async () => {
@@ -547,6 +700,54 @@ export function Phase1Workbench() {
     onError: (e) => setError(e instanceof Error ? e.message : "Bug query failed")
   });
 
+  const createSpec = useMutation({
+    mutationFn: async () => {
+      if (!token || !selectedProjectId) {
+        throw new Error("Select project");
+      }
+      const parsedTitle = z.string().min(3, "Spec title is required").max(160).safeParse(specTitle.trim());
+      const parsedMarkdown = z.string().min(3, "Spec markdown is required").safeParse(specMarkdown.trim());
+      if (!parsedTitle.success) {
+        throw new Error(parsedTitle.error.issues[0]?.message ?? "Invalid spec title");
+      }
+      if (!parsedMarkdown.success) {
+        throw new Error(parsedMarkdown.error.issues[0]?.message ?? "Invalid spec markdown");
+      }
+      return api.createSpec(token, {
+        projectId: selectedProjectId,
+        title: parsedTitle.data,
+        markdown: parsedMarkdown.data
+      });
+    },
+    onSuccess: async (spec) => {
+      setSpecCreatedId(spec.id);
+      await queryClient.invalidateQueries({ queryKey: [ "specs", token, selectedProjectId ] });
+      await queryClient.invalidateQueries({ queryKey: [ "specs-coverage", token, selectedProjectId ] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Spec creation failed")
+  });
+
+  const updateSpec = useMutation({
+    mutationFn: async () => {
+      if (!token || !selectedSpecId) {
+        throw new Error("Select spec to update");
+      }
+      const parsedMarkdown = z.string().min(3, "Spec markdown is required").safeParse(specUpdateMarkdown.trim());
+      if (!parsedMarkdown.success) {
+        throw new Error(parsedMarkdown.error.issues[0]?.message ?? "Invalid spec markdown");
+      }
+      return api.updateSpec(token, selectedSpecId, {
+        markdown: parsedMarkdown.data
+      });
+    },
+    onSuccess: async (spec) => {
+      setSpecUpdatedId(spec.id);
+      await queryClient.invalidateQueries({ queryKey: [ "specs", token, selectedProjectId ] });
+      await queryClient.invalidateQueries({ queryKey: [ "specs-coverage", token, selectedProjectId ] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Spec update failed")
+  });
+
   const createSprint = useMutation({
     mutationFn: async () => {
       if (!token) {
@@ -643,144 +844,190 @@ export function Phase1Workbench() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="mx-auto grid max-w-7xl gap-4">
-        <header className={`rounded-2xl p-6 shadow-soft ${panel}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.2em] text-pine">Krud Phase 1 + 2</p>
-              <h1 className="mt-2 text-3xl font-semibold">Auth, Projects, Bugs, Test Cases, Test Runs</h1>
-              <p className="mt-2 text-sm">API health: {healthQuery.data?.status ?? "checking..."}</p>
+    <div className="relative min-h-screen overflow-hidden px-4 py-6 md:px-8 md:py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(31,136,61,0.15),transparent_38%),radial-gradient(circle_at_92%_10%,rgba(9,105,218,0.12),transparent_40%)]" />
+      <div className="relative mx-auto max-w-7xl">
+        <div className={workspaceGridClass}>
+          <aside className={`rounded-2xl md:sticky md:top-6 md:h-[calc(100vh-3rem)] ${collapsedSidebar ? "p-3" : "p-4"} ${panel}`}>
+            <div className={`${collapsedSidebar ? "mb-4 flex flex-col items-center gap-2" : "mb-4 flex items-center justify-between"}`}>
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#1f883d]">{collapsedSidebar ? "KR" : "KRUD NAV"}</p>
+              <button type="button" onClick={toggleSidebar} className={sidebarToggleButton} aria-label={collapsedSidebar ? "Expand sidebar" : "Collapse sidebar"}>
+                {collapsedSidebar ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              </button>
             </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={toggleTheme} className="rounded-xl border border-current/20 px-3 py-2 text-xs uppercase">Theme</button>
-              {user ? <button type="button" data-testid="logout-button" onClick={logout} className="rounded-xl border border-current/20 px-3 py-2 text-xs uppercase">Logout</button> : null}
+            <div className={`${collapsedSidebar ? "grid justify-center gap-2" : "grid gap-2"}`}>
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <a key={item.id} href={item.href} className={navButton(item.id)} title={collapsedSidebar ? item.label : undefined} aria-label={item.label}>
+                    <Icon size={14} />
+                    {!collapsedSidebar ? item.label : null}
+                  </a>
+                );
+              })}
             </div>
-          </div>
-        </header>
 
-        {error ? <div data-testid="form-error" className={`flex items-center gap-2 rounded-2xl border px-4 py-3 ${panel}`}><AlertCircle size={16} className="text-ember" /><p className="text-sm">{error}</p></div> : null}
+            {!collapsedSidebar ? (
+              <div className="mt-6 space-y-2">
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] opacity-75">API Endpoints</p>
+                {endpointGroups.map((item) => (
+                  <div key={item.label} className={`rounded-lg border px-3 py-2 ${input}`}>
+                    <p className="text-[11px] uppercase tracking-wider opacity-80">{item.label}</p>
+                    <p className="font-mono text-xs">{item.endpoint}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </aside>
+
+          <div className="space-y-4 md:space-y-5">
+            <header id="overview" className={`rounded-2xl p-5 md:p-6 ${panel}`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[#1f883d]">KRUD // QAFlow Workbench</p>
+                  <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Auth, Projects, Bugs, Test Cases, Test Runs</h1>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={statusBadge}>API: {healthQuery.data?.status ?? "checking..."}</span>
+                    {selectedProject ? <span className={statusBadge}>Project: {selectedProject.key}</span> : null}
+                    {user ? <span className={statusBadge}>Role: {user.role}</span> : null}
+                    <span className={statusBadge}>
+                      <UserRound size={12} className="inline-block" /> {user ? user.email : "Guest"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={toggleTheme} className={ghostButton}>
+                    {theme === "dark" ? <SunMedium size={14} /> : <MoonStar size={14} />}
+                    Theme
+                  </button>
+                  {user ? <button type="button" data-testid="logout-button" onClick={logout} className={ghostButton}>Logout</button> : null}
+                </div>
+              </div>
+            </header>
+
+            {error ? <div data-testid="form-error" className="flex items-center gap-2 rounded-2xl border border-red-400/60 bg-red-500/10 px-4 py-3 text-sm text-red-200"><AlertCircle size={16} className="text-red-300" /><p>{error}</p></div> : null}
 
         {!user ? (
-          <section className={`rounded-2xl p-6 shadow-soft ${panel}`}>
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><ShieldCheck size={18} className="text-pine" />Login</h2>
+          <section className={`rounded-2xl p-5 md:p-6 ${panel}`}>
+            <h2 className={`${sectionTitle} flex items-center gap-2`}><ShieldCheck size={18} className="text-[#1f883d]" />Login</h2>
             <form data-testid="login-form" className="grid gap-3 md:max-w-md" onSubmit={(e) => { e.preventDefault(); setError(null); loginMutation.mutate(); }}>
-              <input data-testid="login-email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-              <input data-testid="login-password" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-              <button data-testid="login-submit" type="submit" className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white">Login</button>
+              <input data-testid="login-email" type="email" placeholder="admin@krud.local" autoComplete="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+              <input data-testid="login-password" type="password" placeholder="Your password" autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+              <button data-testid="login-submit" type="submit" className={primaryButton}>Login</button>
             </form>
           </section>
         ) : (
-          <section className="grid gap-4 md:grid-cols-2">
-            <article className={`rounded-2xl p-6 shadow-soft ${panel}`}>
-              <h2 className="mb-4 text-lg font-semibold">Session</h2>
-              <p data-testid="auth-email-badge" className="rounded-xl bg-pine/15 px-3 py-2 text-sm font-medium">{user.email} ({user.role})</p>
-            </article>
+          <section className="grid gap-4 md:grid-cols-2 md:gap-5">
+            <SessionPanel panelClass={`rounded-2xl p-5 md:p-6 ${panel}`} sectionTitleClass={sectionTitle} user={user} />
 
-            <article className={`rounded-2xl p-6 shadow-soft ${panel}`}>
-              <h2 className="mb-4 text-lg font-semibold">Create Project</h2>
-              <form data-testid="project-form" className="grid gap-3" onSubmit={(e) => { e.preventDefault(); setError(null); createProject.mutate(); }}>
-                <input data-testid="project-name" placeholder="Project name" value={projectName} onChange={(e) => setProjectName(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="project-key" placeholder="Key" value={projectKey} onChange={(e) => setProjectKey(e.target.value.toUpperCase())} className={`w-full rounded-xl border px-3 py-2 uppercase ${input}`} />
-                <select data-testid="project-methodology" value={projectMethodology} onChange={(e) => setProjectMethodology(e.target.value as "SCRUM" | "KANBAN")} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
-                  <option value="SCRUM">SCRUM</option>
-                  <option value="KANBAN">KANBAN</option>
-                </select>
-                <button data-testid="project-submit" type="submit" className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white">Create Project</button>
-              </form>
-              {projectSuccess ? <p data-testid="project-created-key" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created project key: {projectSuccess}</p> : null}
-            </article>
+            <ProjectsPanel
+              panelClass={sectionClass("projects", `rounded-2xl p-5 md:p-6 ${panel}`)}
+              sectionTitleClass={sectionTitle}
+              inputClass={input}
+              buttonClass={primaryButton}
+              projectName={projectName}
+              projectKey={projectKey}
+              projectMethodology={projectMethodology}
+              projectSuccess={projectSuccess}
+              onProjectNameChange={setProjectName}
+              onProjectKeyChange={setProjectKey}
+              onProjectMethodologyChange={setProjectMethodology}
+              onSubmit={() => {
+                setError(null);
+                createProject.mutate();
+              }}
+            />
 
-            <article className={`rounded-2xl p-6 shadow-soft md:col-span-2 ${panel}`}>
-              <h2 className="mb-4 text-lg font-semibold">Create Bug</h2>
+            <article id="bugs" className={sectionClass("bugs", `rounded-2xl p-5 md:p-6 md:col-span-2 ${panel}`)}>
+              <h2 className={sectionTitle}>Create Bug</h2>
               <form data-testid="bug-form" className="grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); createBug.mutate(); }}>
-                <select data-testid="bug-project" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>{(projectsQuery.data ?? []).map((p: Project) => <option key={p.id} value={p.id}>{p.key} - {p.name}</option>)}</select>
-                <input data-testid="bug-title" placeholder="Bug title" value={bugTitle} onChange={(e) => setBugTitle(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <textarea data-testid="bug-description" placeholder="Description" value={bugDescription} onChange={(e) => setBugDescription(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`} />
-                <select data-testid="bug-linked-case" value={bugLinkedCaseId} onChange={(e) => setBugLinkedCaseId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`}>
+                <select data-testid="bug-project" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>{(projectsQuery.data ?? []).map((p: Project) => <option key={p.id} value={p.id}>{p.key} - {p.name}</option>)}</select>
+                <input data-testid="bug-title" placeholder="Bug title" value={bugTitle} onChange={(e) => setBugTitle(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <textarea data-testid="bug-description" placeholder="Description" value={bugDescription} onChange={(e) => setBugDescription(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm md:col-span-2 ${input}`} />
+                <select data-testid="bug-linked-case" value={bugLinkedCaseId} onChange={(e) => setBugLinkedCaseId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm md:col-span-2 ${input}`}>
                   <option value="">No linked test case</option>
                   {(testCasesQuery.data ?? []).map((item: TestCase) => <option key={item.id} value={item.id}>{item.title}</option>)}
                 </select>
-                <select data-testid="bug-severity" value={bugSeverity} onChange={(e) => setBugSeverity(e.target.value as "S1" | "S2" | "S3" | "S4")} className={`w-full rounded-xl border px-3 py-2 ${input}`}><option value="S1">S1</option><option value="S2">S2</option><option value="S3">S3</option><option value="S4">S4</option></select>
-                <select data-testid="bug-priority" value={bugPriority} onChange={(e) => setBugPriority(e.target.value as "P1" | "P2" | "P3" | "P4")} className={`w-full rounded-xl border px-3 py-2 ${input}`}><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option><option value="P4">P4</option></select>
-                <button data-testid="bug-submit" type="submit" disabled={!selectedProject} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Create Bug</button>
+                <select data-testid="bug-severity" value={bugSeverity} onChange={(e) => setBugSeverity(e.target.value as "S1" | "S2" | "S3" | "S4")} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}><option value="S1">S1</option><option value="S2">S2</option><option value="S3">S3</option><option value="S4">S4</option></select>
+                <select data-testid="bug-priority" value={bugPriority} onChange={(e) => setBugPriority(e.target.value as "P1" | "P2" | "P3" | "P4")} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option><option value="P4">P4</option></select>
+                <button data-testid="bug-submit" type="submit" disabled={!selectedProject} className={`${primaryButton} md:col-span-2`}>Create Bug</button>
               </form>
-              {bugSuccess ? <p data-testid="bug-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created bug id: {bugSuccess}</p> : null}
-              {bugLinkSuccess ? <p data-testid="bug-created-linked-case" className="mt-2 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Linked test case id: {bugLinkSuccess}</p> : null}
+              {bugSuccess ? <p data-testid="bug-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Created bug id: {bugSuccess}</p> : null}
+              {bugLinkSuccess ? <p data-testid="bug-created-linked-case" className="mt-2 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Linked test case id: {bugLinkSuccess}</p> : null}
 
               <form data-testid="bug-status-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); updateBugStatus.mutate(); }}>
-                <select data-testid="bug-status-item" value={selectedBugId} onChange={(e) => setSelectedBugId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="bug-status-item" value={selectedBugId} onChange={(e) => setSelectedBugId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   {(bugsQuery.data ?? []).map((item: Bug) => <option key={item.id} value={item.id}>{item.title} ({item.status})</option>)}
                 </select>
-                <select data-testid="bug-status-value" value={bugStatus} onChange={(e) => setBugStatus(e.target.value as "OPEN" | "IN_PROGRESS" | "READY_FOR_QA" | "CLOSED")} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="bug-status-value" value={bugStatus} onChange={(e) => setBugStatus(e.target.value as "OPEN" | "IN_PROGRESS" | "READY_FOR_QA" | "CLOSED")} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   <option value="OPEN">OPEN</option>
                   <option value="IN_PROGRESS">IN_PROGRESS</option>
                   <option value="READY_FOR_QA">READY_FOR_QA</option>
                   <option value="CLOSED">CLOSED</option>
                 </select>
-                <button data-testid="bug-status-submit" type="submit" disabled={!selectedBugId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Update Bug Status</button>
+                <button data-testid="bug-status-submit" type="submit" disabled={!selectedBugId} className={`${primaryButton} md:col-span-2`}>Update Bug Status</button>
               </form>
-              {bugStatusSuccess ? <p data-testid="bug-status-updated" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Updated bug: {bugStatusSuccess}</p> : null}
+              {bugStatusSuccess ? <p data-testid="bug-status-updated" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Updated bug: {bugStatusSuccess}</p> : null}
 
               <form data-testid="bug-assign-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); assignBug.mutate(); }}>
-                <select data-testid="bug-assign-item" value={selectedBugId} onChange={(e) => setSelectedBugId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="bug-assign-item" value={selectedBugId} onChange={(e) => setSelectedBugId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   {(bugsQuery.data ?? []).map((item: Bug) => <option key={item.id} value={item.id}>{item.title}</option>)}
                 </select>
-                <select data-testid="bug-assign-developer" value={selectedDeveloperId} onChange={(e) => setSelectedDeveloperId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="bug-assign-developer" value={selectedDeveloperId} onChange={(e) => setSelectedDeveloperId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   {(developersQuery.data ?? []).map((item: User) => <option key={item.id} value={item.id}>{item.email}</option>)}
                 </select>
-                <button data-testid="bug-assign-submit" type="submit" disabled={!selectedBugId || !selectedDeveloperId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Assign Developer</button>
+                <button data-testid="bug-assign-submit" type="submit" disabled={!selectedBugId || !selectedDeveloperId} className={`${primaryButton} md:col-span-2`}>Assign Developer</button>
               </form>
-              {bugAssigneeSuccess ? <p data-testid="bug-assigned-to" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Assigned to: {bugAssigneeSuccess}</p> : null}
+              {bugAssigneeSuccess ? <p data-testid="bug-assigned-to" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Assigned to: {bugAssigneeSuccess}</p> : null}
 
               <form data-testid="bug-query-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); queryBugs.mutate(); }}>
-                <input data-testid="bug-query-input" value={bugQuery} onChange={(e) => setBugQuery(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`} />
-                <button data-testid="bug-query-submit" type="submit" className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Run Bug Query</button>
+                <input data-testid="bug-query-input" value={bugQuery} onChange={(e) => setBugQuery(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm md:col-span-2 ${input}`} />
+                <button data-testid="bug-query-submit" type="submit" className={`${primaryButton} md:col-span-2`}>Run Bug Query</button>
               </form>
               {bugQueryResults.length > 0 ? <p data-testid="bug-query-count" className="mt-3 text-sm">Query results: {bugQueryResults.length}</p> : null}
               <div data-testid="bug-query-results" className="mt-2 grid gap-2 md:grid-cols-2">
                 {bugQueryResults.map((item) => (
-                  <div key={item.id} className={`rounded-xl border p-2 text-sm ${input}`}>
+                  <div key={item.id} className={`rounded-lg border p-2 text-sm ${input}`}>
                     {item.title} [{item.status}]
                   </div>
                 ))}
               </div>
             </article>
 
-            <article className={`rounded-2xl p-6 shadow-soft md:col-span-2 ${panel}`}>
-              <h2 className="mb-4 text-lg font-semibold">Agile: Sprint + Kanban</h2>
+            <article id="agile" className={sectionClass("agile", `rounded-2xl p-5 md:p-6 md:col-span-2 ${panel}`)}>
+              <h2 className={`${sectionTitle} flex items-center gap-2`}><GitBranch size={18} className="text-[#1f883d]" />Agile: Sprint + Kanban</h2>
 
               <form data-testid="agile-sprint-form" className="grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); createSprint.mutate(); }}>
-                <input data-testid="agile-sprint-name" value={sprintName} onChange={(e) => setSprintName(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="agile-sprint-goal" value={sprintGoal} onChange={(e) => setSprintGoal(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="agile-sprint-start" type="date" value={sprintStartDate} onChange={(e) => setSprintStartDate(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="agile-sprint-end" type="date" value={sprintEndDate} onChange={(e) => setSprintEndDate(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <button data-testid="agile-sprint-submit" type="submit" disabled={!selectedProjectId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Create Sprint</button>
+                <input data-testid="agile-sprint-name" value={sprintName} onChange={(e) => setSprintName(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <input data-testid="agile-sprint-goal" value={sprintGoal} onChange={(e) => setSprintGoal(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <input data-testid="agile-sprint-start" type="date" value={sprintStartDate} onChange={(e) => setSprintStartDate(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <input data-testid="agile-sprint-end" type="date" value={sprintEndDate} onChange={(e) => setSprintEndDate(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <button data-testid="agile-sprint-submit" type="submit" disabled={!selectedProjectId} className={`${primaryButton} md:col-span-2`}>Create Sprint</button>
               </form>
-              {sprintSuccess ? <p data-testid="agile-sprint-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created sprint id: {sprintSuccess}</p> : null}
+              {sprintSuccess ? <p data-testid="agile-sprint-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Created sprint id: {sprintSuccess}</p> : null}
 
               <form data-testid="agile-column-form" className="mt-4 grid gap-3 md:grid-cols-3" onSubmit={(e) => { e.preventDefault(); setError(null); createBoardColumn.mutate(); }}>
-                <input data-testid="agile-column-name" value={columnName} onChange={(e) => setColumnName(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="agile-column-position" type="number" min="0" value={columnPosition} onChange={(e) => setColumnPosition(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="agile-column-wip" type="number" min="1" value={columnWipLimit} onChange={(e) => setColumnWipLimit(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <button data-testid="agile-column-submit" type="submit" disabled={!selectedProjectId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-3">Create Kanban Column</button>
+                <input data-testid="agile-column-name" value={columnName} onChange={(e) => setColumnName(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <input data-testid="agile-column-position" type="number" min="0" value={columnPosition} onChange={(e) => setColumnPosition(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <input data-testid="agile-column-wip" type="number" min="1" value={columnWipLimit} onChange={(e) => setColumnWipLimit(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <button data-testid="agile-column-submit" type="submit" disabled={!selectedProjectId} className={`${primaryButton} md:col-span-3`}>Create Kanban Column</button>
               </form>
-              {columnSuccess ? <p data-testid="agile-column-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created column id: {columnSuccess}</p> : null}
+              {columnSuccess ? <p data-testid="agile-column-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Created column id: {columnSuccess}</p> : null}
 
               <form data-testid="agile-move-form" className="mt-4 grid gap-3 md:grid-cols-3" onSubmit={(e) => { e.preventDefault(); setError(null); moveBugOnBoard.mutate(); }}>
-                <select data-testid="agile-move-bug" value={selectedBoardBugId} onChange={(e) => setSelectedBoardBugId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="agile-move-bug" value={selectedBoardBugId} onChange={(e) => setSelectedBoardBugId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   {(bugsQuery.data ?? []).map((item: Bug) => <option key={item.id} value={item.id}>{item.title}</option>)}
                 </select>
-                <select data-testid="agile-move-column" value={selectedBoardColumnId} onChange={(e) => setSelectedBoardColumnId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="agile-move-column" value={selectedBoardColumnId} onChange={(e) => setSelectedBoardColumnId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   {(columnsQuery.data ?? []).map((item: BoardColumn) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
-                <select data-testid="agile-move-sprint" value={selectedMoveSprintId} onChange={(e) => setSelectedMoveSprintId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="agile-move-sprint" value={selectedMoveSprintId} onChange={(e) => setSelectedMoveSprintId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   <option value="">No sprint</option>
                   {(sprintsQuery.data ?? []).map((item: Sprint) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
-                <button data-testid="agile-move-submit" type="submit" disabled={!selectedBoardBugId || !selectedBoardColumnId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-3">Move Bug to Column</button>
+                <button data-testid="agile-move-submit" type="submit" disabled={!selectedBoardBugId || !selectedBoardColumnId} className={`${primaryButton} md:col-span-3`}>Move Bug to Column</button>
               </form>
-              {boardMoveSuccess ? <p data-testid="agile-move-success" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Moved bug: {boardMoveSuccess}</p> : null}
+              {boardMoveSuccess ? <p data-testid="agile-move-success" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Moved bug: {boardMoveSuccess}</p> : null}
 
               <div data-testid="agile-board" className="mt-4 grid gap-3 md:grid-cols-3">
                 {(columnsQuery.data ?? []).map((column: BoardColumn) => {
@@ -789,10 +1036,10 @@ export function Phase1Workbench() {
                   const isWipExceeded = Boolean(column.wipLimit && count > column.wipLimit);
 
                   return (
-                    <div key={column.id} className={`rounded-xl border p-3 ${input}`}>
+                    <div key={column.id} className={`rounded-lg border p-3 ${input}`}>
                       <p className="text-sm font-semibold">{column.name}</p>
                       <p data-testid="agile-column-count" className="text-xs opacity-80">Cards: {count}{column.wipLimit ? ` / WIP ${column.wipLimit}` : ""}</p>
-                      {isWipExceeded ? <p data-testid="agile-wip-warning" className="mt-2 text-xs text-ember">WIP warning: {column.name} exceeds limit</p> : null}
+                      {isWipExceeded ? <p data-testid="agile-wip-warning" className="mt-2 text-xs text-amber-500">WIP warning: {column.name} exceeds limit</p> : null}
                       <div className="mt-2 grid gap-2">
                         {bugsInColumn.map((bug) => <div key={bug.id} data-testid="agile-card" className={`rounded-lg border px-2 py-1 text-xs ${input}`}>{bug.title}</div>)}
                       </div>
@@ -802,19 +1049,19 @@ export function Phase1Workbench() {
               </div>
             </article>
 
-            <article className={`rounded-2xl p-6 shadow-soft md:col-span-2 ${panel}`}>
-              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><TestTube2 size={18} className="text-pine" />Phase 2: Test Case and Run</h2>
+            <article id="tests" className={sectionClass("tests", `rounded-2xl p-5 md:p-6 md:col-span-2 ${panel}`)}>
+              <h2 className={`${sectionTitle} flex items-center gap-2`}><TestTube2 size={18} className="text-[#1f883d]" />Phase 2: Test Case and Run</h2>
               <form data-testid="test-case-form" className="grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); createCase.mutate(); }}>
-                <select data-testid="test-case-project" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>{(projectsQuery.data ?? []).map((p: Project) => <option key={p.id} value={p.id}>{p.key} - {p.name}</option>)}</select>
-                <input data-testid="test-case-title" placeholder="Test case title" value={caseTitle} onChange={(e) => setCaseTitle(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <textarea data-testid="test-case-steps" value={caseSteps} onChange={(e) => setCaseSteps(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`} />
-                <button data-testid="test-case-submit" type="submit" disabled={!selectedProject} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Create Test Case</button>
+                <select data-testid="test-case-project" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>{(projectsQuery.data ?? []).map((p: Project) => <option key={p.id} value={p.id}>{p.key} - {p.name}</option>)}</select>
+                <input data-testid="test-case-title" placeholder="Test case title" value={caseTitle} onChange={(e) => setCaseTitle(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <textarea data-testid="test-case-steps" value={caseSteps} onChange={(e) => setCaseSteps(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm md:col-span-2 ${input}`} />
+                <button data-testid="test-case-submit" type="submit" disabled={!selectedProject} className={`${primaryButton} md:col-span-2`}>Create Test Case</button>
               </form>
-              {caseSuccess ? <p data-testid="test-case-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created test case id: {caseSuccess}</p> : null}
+              {caseSuccess ? <p data-testid="test-case-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Created test case id: {caseSuccess}</p> : null}
 
               <div data-testid="test-case-selection" className="mt-4 grid gap-2 md:grid-cols-2">
                 {(testCasesQuery.data ?? []).map((item: TestCase) => (
-                  <label key={item.id} className={`flex items-center gap-2 rounded-xl border p-2 ${input}`}>
+                  <label key={item.id} className={`flex items-center gap-2 rounded-lg border p-2 ${input}`}>
                     <input data-testid={`test-case-checkbox-${item.id}`} type="checkbox" checked={selectedCaseIds.includes(item.id)} onChange={(e) => setSelectedCaseIds((prev) => e.target.checked ? Array.from(new Set([ ...prev, item.id ])) : prev.filter((x) => x !== item.id))} />
                     <span className="text-sm">{item.title}</span>
                   </label>
@@ -822,38 +1069,91 @@ export function Phase1Workbench() {
               </div>
 
               <form data-testid="test-case-edit-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); updateCase.mutate(); }}>
-                <select data-testid="test-case-edit-id" value={editCaseId} onChange={(e) => setEditCaseId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <select data-testid="test-case-edit-id" value={editCaseId} onChange={(e) => setEditCaseId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   {(testCasesQuery.data ?? []).map((item: TestCase) => <option key={item.id} value={item.id}>{item.title}</option>)}
                 </select>
-                <input data-testid="test-case-edit-title" value={editCaseTitle} onChange={(e) => setEditCaseTitle(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <select data-testid="test-case-edit-status" value={editCaseStatus} onChange={(e) => setEditCaseStatus(e.target.value as "DRAFT" | "READY" | "DEPRECATED")} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                <input data-testid="test-case-edit-title" value={editCaseTitle} onChange={(e) => setEditCaseTitle(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <select data-testid="test-case-edit-status" value={editCaseStatus} onChange={(e) => setEditCaseStatus(e.target.value as "DRAFT" | "READY" | "DEPRECATED")} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
                   <option value="DRAFT">DRAFT</option>
                   <option value="READY">READY</option>
                   <option value="DEPRECATED">DEPRECATED</option>
                 </select>
-                <button data-testid="test-case-edit-submit" type="submit" disabled={!editCaseId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white">Save Test Case</button>
+                <button data-testid="test-case-edit-submit" type="submit" disabled={!editCaseId} className={primaryButton}>Save Test Case</button>
               </form>
-              {caseUpdateSuccess ? <p data-testid="test-case-updated-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Updated test case id: {caseUpdateSuccess}</p> : null}
+              {caseUpdateSuccess ? <p data-testid="test-case-updated-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Updated test case id: {caseUpdateSuccess}</p> : null}
 
               <form data-testid="test-run-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); createRun.mutate(); }}>
-                <input data-testid="test-run-name" value={runName} onChange={(e) => setRunName(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <input data-testid="test-run-date" type="date" value={runDate} onChange={(e) => setRunDate(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
-                <button data-testid="test-run-submit" type="submit" className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Create Test Run</button>
+                <input data-testid="test-run-name" value={runName} onChange={(e) => setRunName(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <input data-testid="test-run-date" type="date" value={runDate} onChange={(e) => setRunDate(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <button data-testid="test-run-submit" type="submit" className={`${primaryButton} md:col-span-2`}>Create Test Run</button>
               </form>
-              {runSuccess ? <p data-testid="test-run-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created test run id: {runSuccess}</p> : null}
+              {runSuccess ? <p data-testid="test-run-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Created test run id: {runSuccess}</p> : null}
 
               <form data-testid="test-execution-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); executeFail.mutate(); }}>
-                <select data-testid="execution-run" value={selectedRunId} onChange={(e) => setSelectedRunId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>{(testRunsQuery.data ?? []).map((r: TestRun) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
-                <select data-testid="execution-case" value={selectedRunCaseId} onChange={(e) => setSelectedRunCaseId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>{runCases.map((r) => <option key={r.testCaseId} value={r.testCaseId}>{r.testCaseId.slice(0, 8)}...</option>)}</select>
-                <button data-testid="execution-submit" type="submit" disabled={!selectedRunId || !selectedRunCaseId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white">Mark FAIL and Auto-create Bug</button>
-                <button data-testid="execution-pass-submit" type="button" disabled={!selectedRunId || !selectedRunCaseId} onClick={() => { setError(null); executePass.mutate(); }} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white">Mark PASS</button>
+                <select data-testid="execution-run" value={selectedRunId} onChange={(e) => setSelectedRunId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>{(testRunsQuery.data ?? []).map((r: TestRun) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+                <select data-testid="execution-case" value={selectedRunCaseId} onChange={(e) => setSelectedRunCaseId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>{runCases.map((r) => <option key={r.testCaseId} value={r.testCaseId}>{r.testCaseId.slice(0, 8)}...</option>)}</select>
+                <button data-testid="execution-submit" type="submit" disabled={!selectedRunId || !selectedRunCaseId} className={primaryButton}>Mark FAIL and Auto-create Bug</button>
+                <button data-testid="execution-pass-submit" type="button" disabled={!selectedRunId || !selectedRunCaseId} onClick={() => { setError(null); executePass.mutate(); }} className={primaryButton}>Mark PASS</button>
               </form>
-              {execResultSuccess ? <p data-testid="execution-result" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Execution saved: {execResultSuccess}</p> : null}
-              {execLinkedBugId ? <p data-testid="execution-linked-bug" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Linked bug id: {execLinkedBugId}</p> : null}
+              {execResultSuccess ? <p data-testid="execution-result" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Execution saved: {execResultSuccess}</p> : null}
+              {execLinkedBugId ? <p data-testid="execution-linked-bug" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Linked bug id: {execLinkedBugId}</p> : null}
             </article>
+
+            <article id="specs" className={sectionClass("specs", `rounded-2xl p-5 md:p-6 md:col-span-2 ${panel}`)}>
+              <h2 className={`${sectionTitle} flex items-center gap-2`}><ScrollText size={18} className="text-[#1f883d]" />Specifications</h2>
+
+              <form data-testid="spec-create-form" className="grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); createSpec.mutate(); }}>
+                <input data-testid="spec-title" value={specTitle} onChange={(e) => setSpecTitle(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
+                <select data-testid="spec-project" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
+                  {(projectsQuery.data ?? []).map((p: Project) => <option key={p.id} value={p.id}>{p.key} - {p.name}</option>)}
+                </select>
+                <textarea data-testid="spec-markdown" value={specMarkdown} onChange={(e) => setSpecMarkdown(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm md:col-span-2 ${input}`} rows={5} />
+                <button data-testid="spec-submit" type="submit" disabled={!selectedProjectId} className={`${primaryButton} md:col-span-2`}>Create Spec</button>
+              </form>
+              {specCreatedId ? <p data-testid="spec-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Created spec id: {specCreatedId}</p> : null}
+
+              <form data-testid="spec-update-form" className="mt-4 grid gap-3 border-t border-current/10 pt-4 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); updateSpec.mutate(); }}>
+                <select data-testid="spec-update-id" value={selectedSpecId} onChange={(e) => setSelectedSpecId(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`}>
+                  {(specsQuery.data ?? []).map((item: Specification) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
+                <button data-testid="spec-update-submit" type="submit" disabled={!selectedSpecId} className={primaryButton}>Save Spec Version</button>
+                <textarea data-testid="spec-update-markdown" value={specUpdateMarkdown} onChange={(e) => setSpecUpdateMarkdown(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm md:col-span-2 ${input}`} rows={5} />
+              </form>
+              {specUpdatedId ? <p data-testid="spec-updated-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-[#1f883d]" />Updated spec id: {specUpdatedId}</p> : null}
+
+              <div data-testid="spec-coverage" className="mt-4 grid gap-2 md:grid-cols-3">
+                <div className={`rounded-lg border p-3 ${input}`}><p className="text-xs uppercase opacity-75">Total Specs</p><p className="mt-1 text-lg font-semibold">{specCoverageQuery.data?.totalSpecs ?? 0}</p></div>
+                <div className={`rounded-lg border p-3 ${input}`}><p className="text-xs uppercase opacity-75">Covered</p><p className="mt-1 text-lg font-semibold">{specCoverageQuery.data?.coveredSpecs ?? 0}</p></div>
+                <div className={`rounded-lg border p-3 ${input}`}><p className="text-xs uppercase opacity-75">Uncovered</p><p className="mt-1 text-lg font-semibold">{specCoverageQuery.data?.uncoveredSpecs ?? 0}</p></div>
+              </div>
+
+              <div data-testid="spec-list" className="mt-4 grid gap-2 md:grid-cols-2">
+                {(specsQuery.data ?? []).map((item) => (
+                  <div key={item.id} className={`rounded-lg border p-3 ${input}`}>
+                    <p className="text-sm font-semibold">{item.title}</p>
+                    <p className="mt-1 text-xs opacity-75">Latest version: {item.versions[0]?.version ?? 1}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <IntegrationsPanel
+              panelClass={sectionClass("integrations", `rounded-2xl p-5 md:p-6 md:col-span-2 ${panel}`)}
+              sectionTitleClass={sectionTitle}
+              inputClass={input}
+              endpointGroups={endpointGroups}
+            />
           </section>
         )}
+        <footer className={`rounded-2xl p-4 ${panel}`}>
+          <p className="text-xs opacity-80">Krud QAFlow - Portfolio First, SaaS Ready - Next.js + NestJS + Prisma + Playwright</p>
+        </footer>
+      </div>
+    </div>
       </div>
     </div>
   );
 }
+
+
+

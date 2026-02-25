@@ -94,6 +94,29 @@ export type BoardColumn = {
   wipLimit?: number | null;
 };
 
+export type SpecificationVersion = {
+  id: string;
+  specificationId: string;
+  version: number;
+  markdown: string;
+  createdAt: string;
+};
+
+export type Specification = {
+  id: string;
+  projectId: string;
+  title: string;
+  markdown: string;
+  versions: SpecificationVersion[];
+  updatedAt: string;
+};
+
+export type SpecCoverage = {
+  totalSpecs: number;
+  coveredSpecs: number;
+  uncoveredSpecs: number;
+};
+
 type RequestOptions = RequestInit & {
   token?: string;
 };
@@ -375,6 +398,46 @@ export const api = {
         comment: input.comment,
         autoCreateBug: input.autoCreateBug
       })
+    }),
+
+  createSpec: (
+    token: string,
+    input: {
+      projectId: string;
+      title: string;
+      markdown: string;
+      attachments?: Record<string, unknown>;
+    }
+  ) =>
+    request<Specification>("/specs", {
+      method: "POST",
+      token,
+      body: JSON.stringify(input)
+    }),
+
+  listSpecs: (token: string, projectId: string) =>
+    request<Specification[]>(`/specs?projectId=${encodeURIComponent(projectId)}`, {
+      token
+    }),
+
+  updateSpec: (
+    token: string,
+    specId: string,
+    input: {
+      title?: string;
+      markdown?: string;
+      attachments?: Record<string, unknown>;
+    }
+  ) =>
+    request<Specification>(`/specs/${specId}`, {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(input)
+    }),
+
+  getSpecCoverage: (token: string, projectId: string) =>
+    request<SpecCoverage>(`/specs/coverage/${encodeURIComponent(projectId)}`, {
+      token
     }),
 
   dashboardSummary: async (): Promise<DashboardSummary> => ({

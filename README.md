@@ -131,7 +131,7 @@ Optional integrations:
 
 - CI (`.github/workflows/ci.yml`)
   - Job `lint_build`: install, Prisma generate, lint, build
-  - Job `e2e`: PostgreSQL service, migrations, seed, Playwright run
+  - Job `e2e`: PostgreSQL service, `db:deploy`, seed, Playwright run
   - Uploads artifacts: `playwright-report`, `test-results`
 - CD (`.github/workflows/cd.yml`)
   - Runs on `main` push or manual dispatch
@@ -141,6 +141,12 @@ Optional integrations:
   - Optional deploy hooks:
     - `DEPLOY_HOOK_API`
     - `DEPLOY_HOOK_WEB`
+
+## Public Deployment
+
+- GitHub Pages is not suitable for this project (it is not static-only).
+- Recommended: GitHub repo + Vercel (`apps/web`) + Render/Railway (`apps/api` + PostgreSQL).
+- Full step-by-step guide: [docs/deployment.md](docs/deployment.md)
 
 ## API Endpoints (Initial)
 

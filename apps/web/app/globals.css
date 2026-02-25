@@ -3,10 +3,22 @@
 @tailwind utilities;
 
 :root {
+  --bg-base: #f5f7fa;
+  --bg-muted: #e9eff5;
+  --fg-base: #1f2937;
+  --border-soft: rgba(148, 163, 184, 0.35);
+  --selection-bg: rgba(31, 136, 61, 0.2);
+  --selection-fg: #0f172a;
   color-scheme: light;
 }
 
 .theme-dark {
+  --bg-base: #0b1220;
+  --bg-muted: #101a2c;
+  --fg-base: #e2e8f0;
+  --border-soft: rgba(100, 116, 139, 0.45);
+  --selection-bg: rgba(46, 160, 67, 0.35);
+  --selection-fg: #f8fafc;
   color-scheme: dark;
 }
 
@@ -14,20 +26,29 @@
   box-sizing: border-box;
 }
 
+*::selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(141, 224, 192, 0.55), transparent 35%),
-    radial-gradient(circle at 88% 0%, rgba(255, 119, 77, 0.22), transparent 28%),
-    linear-gradient(180deg, #f9fbfc 0%, #f0f4f6 65%, #e7edf0 100%);
-  color: #1a2631;
+  color: var(--fg-base);
+  background-color: var(--bg-base);
+  background-image:
+    radial-gradient(circle at 8% 0%, rgba(31, 136, 61, 0.16), transparent 35%),
+    radial-gradient(circle at 95% 5%, rgba(9, 105, 218, 0.16), transparent 34%),
+    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-muted) 100%);
 }
 
-.theme-dark body {
-  background:
-    radial-gradient(circle at 10% 10%, rgba(141, 224, 192, 0.15), transparent 32%),
-    radial-gradient(circle at 90% 5%, rgba(255, 119, 77, 0.18), transparent 28%),
-    linear-gradient(180deg, #0f171f 0%, #131f2b 60%, #182536 100%);
-  color: #e8eff7;
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(var(--border-soft) 1px, transparent 1px), linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 0.2;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 70%);
 }
