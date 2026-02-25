@@ -4,15 +4,7 @@ test("playwright scaffold boots", async () => {
   expect(true).toBeTruthy();
 });
 
-const plannedScenarios = [
-  "auth: token expiration refresh",
-  "projects: change methodology scrum->kanban",
-  "projects: configure workflow",
-  "specs: create specification",
-  "specs: versioning history",
-  "specs: coverage view",
-  "negative: invalid enum values"
-] as const;
+const plannedScenarios = [] as const;
 
 for (const scenario of plannedScenarios) {
   test.skip(`${scenario} @planned`, async () => {
