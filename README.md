@@ -124,6 +124,7 @@ Optional integrations:
 - Phase 2 tests/runs E2E: `tests/e2e/specs/phase2-tests-runs.spec.ts`
 - Phase 3 bugs/query E2E: `tests/e2e/specs/phase3-bugs-query.spec.ts`
 - Phase 3 agile E2E: `tests/e2e/specs/phase3-agile.spec.ts`
+- Phase 4 query parser E2E: `tests/e2e/specs/phase4-query.spec.ts`
 
 ## CI/CD
 
