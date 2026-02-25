@@ -122,6 +122,7 @@ Optional integrations:
 - Phase 1 live E2E: `tests/e2e/specs/phase1-auth-projects-bugs.spec.ts`
 - Phase 1 guardrails E2E: `tests/e2e/specs/phase1-guardrails.spec.ts`
 - Phase 2 tests/runs E2E: `tests/e2e/specs/phase2-tests-runs.spec.ts`
+- Phase 3 bugs/query E2E: `tests/e2e/specs/phase3-bugs-query.spec.ts`
 
 ## API Endpoints (Initial)
 
@@ -170,6 +171,9 @@ Integrations:
 - `POST /api/integrations/git/resolve`
 - `POST /api/integrations/git/webhook`
 - `GET /api/integrations/events`
+
+Users:
+- `GET /api/users?role=DEVELOPER`
 
 ## Manual Steps (Optional Integrations)
 

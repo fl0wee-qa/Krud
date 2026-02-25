@@ -10,6 +10,7 @@ import { ProjectsModule } from "./modules/projects/projects.module";
 import { QueryEngineModule } from "./modules/query-engine/query-engine.module";
 import { SpecsModule } from "./modules/specs/specs.module";
 import { TestsModule } from "./modules/tests/tests.module";
+import { UsersModule } from "./modules/users/users.module";
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { TestsModule } from "./modules/tests/tests.module";
     AgileModule,
     SpecsModule,
     IntegrationsModule,
-    QueryEngineModule
+    QueryEngineModule,
+    UsersModule
   ]
 })
 export class AppModule {}

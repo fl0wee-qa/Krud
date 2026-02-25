@@ -12,6 +12,9 @@ async function main() {
   const viewerEmail = (process.env.VIEWER_EMAIL ?? "viewer@krud.local").toLowerCase();
   const viewerPassword = process.env.VIEWER_PASSWORD ?? "Viewer12345!";
   const viewerHash = await bcrypt.hash(viewerPassword, 10);
+  const developerEmail = (process.env.DEVELOPER_EMAIL ?? "developer@krud.local").toLowerCase();
+  const developerPassword = process.env.DEVELOPER_PASSWORD ?? "Developer12345!";
+  const developerHash = await bcrypt.hash(developerPassword, 10);
 
   const admin = await prisma.user.upsert({
     where: {
@@ -47,8 +50,26 @@ async function main() {
     }
   });
 
+  const developer = await prisma.user.upsert({
+    where: {
+      email: developerEmail
+    },
+    update: {
+      name: "Krud Developer",
+      role: UserRole.DEVELOPER,
+      passwordHash: developerHash
+    },
+    create: {
+      email: developerEmail,
+      name: "Krud Developer",
+      role: UserRole.DEVELOPER,
+      passwordHash: developerHash
+    }
+  });
+
   console.log(`Seeded admin user: ${admin.email}`);
   console.log(`Seeded viewer user: ${viewer.email}`);
+  console.log(`Seeded developer user: ${developer.email}`);
 }
 
 main()

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, ShieldCheck, TestTube2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { api, ApiError, AuthUser, Bug, Project, TestCase, TestRun } from "@/lib/api";
+import { api, ApiError, AuthUser, Bug, Project, TestCase, TestRun, User } from "@/lib/api";
 import { useUiStore } from "@/lib/ui-store";
 
 const loginSchema = z.object({
@@ -25,6 +25,7 @@ const bugSchema = z.object({
   projectId: z.string().uuid(),
   title: z.string().min(3, "Bug title is required").max(160),
   description: z.string().max(400).optional(),
+  linkedTestCaseId: z.string().uuid().optional(),
   severity: z.enum([
     "S1",
     "S2",
@@ -72,6 +73,7 @@ export function Phase1Workbench() {
   const [bugDescription, setBugDescription] = useState("");
   const [bugSeverity, setBugSeverity] = useState<"S1" | "S2" | "S3" | "S4">("S2");
   const [bugPriority, setBugPriority] = useState<"P1" | "P2" | "P3" | "P4">("P2");
+  const [bugLinkedCaseId, setBugLinkedCaseId] = useState("");
 
   const [caseTitle, setCaseTitle] = useState("");
   const [caseSteps, setCaseSteps] = useState("Open app\nPerform action\nVerify");
@@ -84,11 +86,16 @@ export function Phase1Workbench() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [selectedRunCaseId, setSelectedRunCaseId] = useState("");
   const [selectedBugId, setSelectedBugId] = useState("");
+  const [selectedDeveloperId, setSelectedDeveloperId] = useState("");
   const [bugStatus, setBugStatus] = useState<"OPEN" | "IN_PROGRESS" | "READY_FOR_QA" | "CLOSED">("OPEN");
+  const [bugQuery, setBugQuery] = useState("status = \"OPEN\"");
+  const [bugQueryResults, setBugQueryResults] = useState<Bug[]>([]);
 
   const [projectSuccess, setProjectSuccess] = useState<string | null>(null);
   const [bugSuccess, setBugSuccess] = useState<string | null>(null);
+  const [bugLinkSuccess, setBugLinkSuccess] = useState<string | null>(null);
   const [bugStatusSuccess, setBugStatusSuccess] = useState<string | null>(null);
+  const [bugAssigneeSuccess, setBugAssigneeSuccess] = useState<string | null>(null);
   const [caseSuccess, setCaseSuccess] = useState<string | null>(null);
   const [caseUpdateSuccess, setCaseUpdateSuccess] = useState<string | null>(null);
   const [runSuccess, setRunSuccess] = useState<string | null>(null);
@@ -145,6 +152,11 @@ export function Phase1Workbench() {
     queryKey: [ "bugs", token, selectedProjectId ],
     queryFn: () => api.listBugs(token as string, selectedProjectId),
     enabled: Boolean(token && selectedProjectId)
+  });
+  const developersQuery = useQuery({
+    queryKey: [ "users", token, "DEVELOPER" ],
+    queryFn: () => api.listUsers(token as string, "DEVELOPER"),
+    enabled: Boolean(token)
   });
 
   useEffect(() => {
@@ -207,9 +219,31 @@ export function Phase1Workbench() {
       setSelectedBugId(current.id);
     }
     setBugStatus(current.status);
+    if (current.assigneeId) {
+      setSelectedDeveloperId(current.assigneeId);
+    }
   }, [
     bugsQuery.data,
     selectedBugId
+  ]);
+
+  useEffect(() => {
+    if (!developersQuery.data || developersQuery.data.length === 0) {
+      setSelectedDeveloperId("");
+      return;
+    }
+    if (!developersQuery.data.some((item) => item.id === selectedDeveloperId)) {
+      setSelectedDeveloperId(developersQuery.data[0].id);
+    }
+  }, [
+    developersQuery.data,
+    selectedDeveloperId
+  ]);
+
+  useEffect(() => {
+    setBugQueryResults([]);
+  }, [
+    selectedProjectId
   ]);
 
   const panel = theme === "light" ? "bg-white/85 text-slate" : "bg-slate/70 text-slate-100";
@@ -250,7 +284,14 @@ export function Phase1Workbench() {
 
   const createBug = useMutation({
     mutationFn: async () => {
-      const parsed = bugSchema.safeParse({ projectId: selectedProjectId, title: bugTitle, description: bugDescription || undefined, severity: bugSeverity, priority: bugPriority });
+      const parsed = bugSchema.safeParse({
+        projectId: selectedProjectId,
+        title: bugTitle,
+        description: bugDescription || undefined,
+        linkedTestCaseId: bugLinkedCaseId || undefined,
+        severity: bugSeverity,
+        priority: bugPriority
+      });
       if (!parsed.success || !token) {
         throw new Error(parsed.error?.issues[0]?.message ?? "Invalid bug");
       }
@@ -258,6 +299,7 @@ export function Phase1Workbench() {
     },
     onSuccess: async (bug) => {
       setBugSuccess(bug.id);
+      setBugLinkSuccess(bug.linkedTestCaseId ?? null);
       await queryClient.invalidateQueries({ queryKey: [ "bugs", token, selectedProjectId ] });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Bug failed")
@@ -388,6 +430,39 @@ export function Phase1Workbench() {
     onError: (e) => setError(e instanceof Error ? e.message : "Bug update failed")
   });
 
+  const assignBug = useMutation({
+    mutationFn: async () => {
+      if (!token || !selectedBugId || !selectedDeveloperId) {
+        throw new Error("Select bug and developer");
+      }
+      return api.updateBug(token, selectedBugId, {
+        assigneeId: selectedDeveloperId
+      });
+    },
+    onSuccess: async () => {
+      const developer = developersQuery.data?.find((item) => item.id === selectedDeveloperId);
+      setBugAssigneeSuccess(developer?.email ?? selectedDeveloperId);
+      await queryClient.invalidateQueries({ queryKey: [ "bugs", token, selectedProjectId ] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Bug assignment failed")
+  });
+
+  const queryBugs = useMutation({
+    mutationFn: async () => {
+      if (!token || !selectedProjectId) {
+        throw new Error("Select project");
+      }
+      return api.queryBugs(token, {
+        projectId: selectedProjectId,
+        query: bugQuery.trim() || undefined
+      });
+    },
+    onSuccess: (bugs) => {
+      setBugQueryResults(bugs);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Bug query failed")
+  });
+
   const selectedProject = useMemo(() => projectsQuery.data?.find((p) => p.id === selectedProjectId) ?? null, [ projectsQuery.data, selectedProjectId ]);
   const runCases = useMemo(() => {
     const run = testRunsQuery.data?.find((r: TestRun) => r.id === selectedRunId);
@@ -457,11 +532,16 @@ export function Phase1Workbench() {
                 <select data-testid="bug-project" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>{(projectsQuery.data ?? []).map((p: Project) => <option key={p.id} value={p.id}>{p.key} - {p.name}</option>)}</select>
                 <input data-testid="bug-title" placeholder="Bug title" value={bugTitle} onChange={(e) => setBugTitle(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
                 <textarea data-testid="bug-description" placeholder="Description" value={bugDescription} onChange={(e) => setBugDescription(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`} />
+                <select data-testid="bug-linked-case" value={bugLinkedCaseId} onChange={(e) => setBugLinkedCaseId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`}>
+                  <option value="">No linked test case</option>
+                  {(testCasesQuery.data ?? []).map((item: TestCase) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
                 <select data-testid="bug-severity" value={bugSeverity} onChange={(e) => setBugSeverity(e.target.value as "S1" | "S2" | "S3" | "S4")} className={`w-full rounded-xl border px-3 py-2 ${input}`}><option value="S1">S1</option><option value="S2">S2</option><option value="S3">S3</option><option value="S4">S4</option></select>
                 <select data-testid="bug-priority" value={bugPriority} onChange={(e) => setBugPriority(e.target.value as "P1" | "P2" | "P3" | "P4")} className={`w-full rounded-xl border px-3 py-2 ${input}`}><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option><option value="P4">P4</option></select>
                 <button data-testid="bug-submit" type="submit" disabled={!selectedProject} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Create Bug</button>
               </form>
               {bugSuccess ? <p data-testid="bug-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created bug id: {bugSuccess}</p> : null}
+              {bugLinkSuccess ? <p data-testid="bug-created-linked-case" className="mt-2 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Linked test case id: {bugLinkSuccess}</p> : null}
 
               <form data-testid="bug-status-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); updateBugStatus.mutate(); }}>
                 <select data-testid="bug-status-item" value={selectedBugId} onChange={(e) => setSelectedBugId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
@@ -476,6 +556,30 @@ export function Phase1Workbench() {
                 <button data-testid="bug-status-submit" type="submit" disabled={!selectedBugId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Update Bug Status</button>
               </form>
               {bugStatusSuccess ? <p data-testid="bug-status-updated" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Updated bug: {bugStatusSuccess}</p> : null}
+
+              <form data-testid="bug-assign-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); assignBug.mutate(); }}>
+                <select data-testid="bug-assign-item" value={selectedBugId} onChange={(e) => setSelectedBugId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                  {(bugsQuery.data ?? []).map((item: Bug) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
+                <select data-testid="bug-assign-developer" value={selectedDeveloperId} onChange={(e) => setSelectedDeveloperId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                  {(developersQuery.data ?? []).map((item: User) => <option key={item.id} value={item.id}>{item.email}</option>)}
+                </select>
+                <button data-testid="bug-assign-submit" type="submit" disabled={!selectedBugId || !selectedDeveloperId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Assign Developer</button>
+              </form>
+              {bugAssigneeSuccess ? <p data-testid="bug-assigned-to" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Assigned to: {bugAssigneeSuccess}</p> : null}
+
+              <form data-testid="bug-query-form" className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); queryBugs.mutate(); }}>
+                <input data-testid="bug-query-input" value={bugQuery} onChange={(e) => setBugQuery(e.target.value)} className={`w-full rounded-xl border px-3 py-2 md:col-span-2 ${input}`} />
+                <button data-testid="bug-query-submit" type="submit" className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Run Bug Query</button>
+              </form>
+              {bugQueryResults.length > 0 ? <p data-testid="bug-query-count" className="mt-3 text-sm">Query results: {bugQueryResults.length}</p> : null}
+              <div data-testid="bug-query-results" className="mt-2 grid gap-2 md:grid-cols-2">
+                {bugQueryResults.map((item) => (
+                  <div key={item.id} className={`rounded-xl border p-2 text-sm ${input}`}>
+                    {item.title} [{item.status}]
+                  </div>
+                ))}
+              </div>
             </article>
 
             <article className={`rounded-2xl p-6 shadow-soft md:col-span-2 ${panel}`}>

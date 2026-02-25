@@ -24,6 +24,13 @@ export type LoginResult = AuthTokens & {
   user: AuthUser;
 };
 
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  role: "ADMIN" | "QA" | "DEVELOPER" | "VIEWER";
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -38,6 +45,8 @@ export type Bug = {
   severity: "S1" | "S2" | "S3" | "S4";
   priority: "P1" | "P2" | "P3" | "P4";
   status: "OPEN" | "IN_PROGRESS" | "READY_FOR_QA" | "CLOSED";
+  linkedTestCaseId?: string | null;
+  assigneeId?: string | null;
 };
 
 export type TestCase = {
@@ -149,6 +158,7 @@ export const api = {
       description?: string;
       severity: "S1" | "S2" | "S3" | "S4";
       priority: "P1" | "P2" | "P3" | "P4";
+      linkedTestCaseId?: string;
       tags?: string[];
     }
   ) =>
@@ -226,6 +236,19 @@ export const api = {
       token
     }),
 
+  queryBugs: (
+    token: string,
+    input: {
+      projectId: string;
+      query?: string;
+    }
+  ) =>
+    request<Bug[]>("/query/bugs", {
+      method: "POST",
+      token,
+      body: JSON.stringify(input)
+    }),
+
   updateBug: (
     token: string,
     id: string,
@@ -243,6 +266,14 @@ export const api = {
       method: "PATCH",
       token,
       body: JSON.stringify(input)
+    }),
+
+  listUsers: (
+    token: string,
+    role?: "ADMIN" | "QA" | "DEVELOPER" | "VIEWER"
+  ) =>
+    request<User[]>(`/users${role ? `?role=${encodeURIComponent(role)}` : ""}`, {
+      token
     }),
 
   saveTestResult: (
