@@ -20,7 +20,7 @@ Krud is a modern QA test and bug management platform inspired by Jira, TestRail,
 - Backend: NestJS, TypeScript, Prisma ORM, PostgreSQL, JWT auth, RBAC guards
 - Infra: Docker Compose, PostgreSQL container, API/Web containers
 - Testing: Playwright (TypeScript) with phased scenario matrix
-- CI: GitHub Actions workflow (`.github/workflows/ci.yml`)
+- CI/CD: GitHub Actions workflows (`.github/workflows/ci.yml`, `.github/workflows/cd.yml`)
 
 ## Repository Layout
 
@@ -123,6 +123,21 @@ Optional integrations:
 - Phase 1 guardrails E2E: `tests/e2e/specs/phase1-guardrails.spec.ts`
 - Phase 2 tests/runs E2E: `tests/e2e/specs/phase2-tests-runs.spec.ts`
 - Phase 3 bugs/query E2E: `tests/e2e/specs/phase3-bugs-query.spec.ts`
+
+## CI/CD
+
+- CI (`.github/workflows/ci.yml`)
+  - Job `lint_build`: install, Prisma generate, lint, build
+  - Job `e2e`: PostgreSQL service, migrations, seed, Playwright run
+  - Uploads artifacts: `playwright-report`, `test-results`
+- CD (`.github/workflows/cd.yml`)
+  - Runs on `main` push or manual dispatch
+  - Builds and pushes Docker images to GHCR:
+    - `ghcr.io/<owner>/krud-api:latest` (+ `sha-<commit>`)
+    - `ghcr.io/<owner>/krud-web:latest` (+ `sha-<commit>`)
+  - Optional deploy hooks:
+    - `DEPLOY_HOOK_API`
+    - `DEPLOY_HOOK_WEB`
 
 ## API Endpoints (Initial)
 
