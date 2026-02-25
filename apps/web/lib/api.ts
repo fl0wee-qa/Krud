@@ -47,6 +47,8 @@ export type Bug = {
   status: "OPEN" | "IN_PROGRESS" | "READY_FOR_QA" | "CLOSED";
   linkedTestCaseId?: string | null;
   assigneeId?: string | null;
+  sprintId?: string | null;
+  columnId?: string | null;
 };
 
 export type TestCase = {
@@ -72,6 +74,24 @@ export type TestRun = {
   name: string;
   executionDate: string;
   results: TestRunResult[];
+};
+
+export type Sprint = {
+  id: string;
+  projectId: string;
+  name: string;
+  goal?: string | null;
+  status: "PLANNED" | "ACTIVE" | "COMPLETED";
+  startDate: string;
+  endDate: string;
+};
+
+export type BoardColumn = {
+  id: string;
+  projectId: string;
+  name: string;
+  position: number;
+  wipLimit?: number | null;
 };
 
 type RequestOptions = RequestInit & {
@@ -274,6 +294,61 @@ export const api = {
   ) =>
     request<User[]>(`/users${role ? `?role=${encodeURIComponent(role)}` : ""}`, {
       token
+    }),
+
+  createSprint: (
+    token: string,
+    input: {
+      projectId: string;
+      name: string;
+      goal?: string;
+      startDate: string;
+      endDate: string;
+    }
+  ) =>
+    request<Sprint>("/agile/sprints", {
+      method: "POST",
+      token,
+      body: JSON.stringify(input)
+    }),
+
+  listSprints: (token: string, projectId: string) =>
+    request<Sprint[]>(`/agile/sprints?projectId=${encodeURIComponent(projectId)}`, {
+      token
+    }),
+
+  createBoardColumn: (
+    token: string,
+    input: {
+      projectId: string;
+      name: string;
+      position: number;
+      wipLimit?: number;
+    }
+  ) =>
+    request<BoardColumn>("/agile/columns", {
+      method: "POST",
+      token,
+      body: JSON.stringify(input)
+    }),
+
+  listBoardColumns: (token: string, projectId: string) =>
+    request<BoardColumn[]>(`/agile/columns?projectId=${encodeURIComponent(projectId)}`, {
+      token
+    }),
+
+  moveBug: (
+    token: string,
+    input: {
+      bugId: string;
+      sprintId?: string;
+      columnId?: string;
+    }
+  ) =>
+    request<Bug>("/agile/move-bug", {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(input)
     }),
 
   saveTestResult: (

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, ShieldCheck, TestTube2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { api, ApiError, AuthUser, Bug, Project, TestCase, TestRun, User } from "@/lib/api";
+import { api, ApiError, AuthUser, BoardColumn, Bug, Project, Sprint, TestCase, TestRun, User } from "@/lib/api";
 import { useUiStore } from "@/lib/ui-store";
 
 const loginSchema = z.object({
@@ -53,6 +53,21 @@ const testRunSchema = z.object({
   testCaseIds: z.array(z.string().uuid()).min(1, "Select at least one case")
 });
 
+const sprintSchema = z.object({
+  projectId: z.string().uuid(),
+  name: z.string().min(3, "Sprint name is required").max(80),
+  goal: z.string().max(200).optional(),
+  startDate: z.string().min(10, "Start date is required"),
+  endDate: z.string().min(10, "End date is required")
+});
+
+const boardColumnSchema = z.object({
+  projectId: z.string().uuid(),
+  name: z.string().min(2, "Column name is required").max(40),
+  position: z.number().int().min(0),
+  wipLimit: z.number().int().min(1).optional()
+});
+
 const TOKEN_KEY = "krud-access-token";
 const USER_KEY = "krud-user";
 
@@ -90,12 +105,29 @@ export function Phase1Workbench() {
   const [bugStatus, setBugStatus] = useState<"OPEN" | "IN_PROGRESS" | "READY_FOR_QA" | "CLOSED">("OPEN");
   const [bugQuery, setBugQuery] = useState("status = \"OPEN\"");
   const [bugQueryResults, setBugQueryResults] = useState<Bug[]>([]);
+  const [sprintName, setSprintName] = useState("Sprint 1");
+  const [sprintGoal, setSprintGoal] = useState("Stabilize critical flows");
+  const [sprintStartDate, setSprintStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [sprintEndDate, setSprintEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().slice(0, 10);
+  });
+  const [columnName, setColumnName] = useState("In Progress");
+  const [columnPosition, setColumnPosition] = useState("1");
+  const [columnWipLimit, setColumnWipLimit] = useState("2");
+  const [selectedBoardBugId, setSelectedBoardBugId] = useState("");
+  const [selectedBoardColumnId, setSelectedBoardColumnId] = useState("");
+  const [selectedMoveSprintId, setSelectedMoveSprintId] = useState("");
 
   const [projectSuccess, setProjectSuccess] = useState<string | null>(null);
   const [bugSuccess, setBugSuccess] = useState<string | null>(null);
   const [bugLinkSuccess, setBugLinkSuccess] = useState<string | null>(null);
   const [bugStatusSuccess, setBugStatusSuccess] = useState<string | null>(null);
   const [bugAssigneeSuccess, setBugAssigneeSuccess] = useState<string | null>(null);
+  const [sprintSuccess, setSprintSuccess] = useState<string | null>(null);
+  const [columnSuccess, setColumnSuccess] = useState<string | null>(null);
+  const [boardMoveSuccess, setBoardMoveSuccess] = useState<string | null>(null);
   const [caseSuccess, setCaseSuccess] = useState<string | null>(null);
   const [caseUpdateSuccess, setCaseUpdateSuccess] = useState<string | null>(null);
   const [runSuccess, setRunSuccess] = useState<string | null>(null);
@@ -157,6 +189,16 @@ export function Phase1Workbench() {
     queryKey: [ "users", token, "DEVELOPER" ],
     queryFn: () => api.listUsers(token as string, "DEVELOPER"),
     enabled: Boolean(token)
+  });
+  const sprintsQuery = useQuery({
+    queryKey: [ "sprints", token, selectedProjectId ],
+    queryFn: () => api.listSprints(token as string, selectedProjectId),
+    enabled: Boolean(token && selectedProjectId)
+  });
+  const columnsQuery = useQuery({
+    queryKey: [ "columns", token, selectedProjectId ],
+    queryFn: () => api.listBoardColumns(token as string, selectedProjectId),
+    enabled: Boolean(token && selectedProjectId)
   });
 
   useEffect(() => {
@@ -241,7 +283,49 @@ export function Phase1Workbench() {
   ]);
 
   useEffect(() => {
+    if (!bugsQuery.data || bugsQuery.data.length === 0) {
+      setSelectedBoardBugId("");
+      return;
+    }
+    if (!bugsQuery.data.some((item) => item.id === selectedBoardBugId)) {
+      setSelectedBoardBugId(bugsQuery.data[0].id);
+    }
+  }, [
+    bugsQuery.data,
+    selectedBoardBugId
+  ]);
+
+  useEffect(() => {
+    if (!columnsQuery.data || columnsQuery.data.length === 0) {
+      setSelectedBoardColumnId("");
+      return;
+    }
+    if (!columnsQuery.data.some((item) => item.id === selectedBoardColumnId)) {
+      setSelectedBoardColumnId(columnsQuery.data[0].id);
+    }
+  }, [
+    columnsQuery.data,
+    selectedBoardColumnId
+  ]);
+
+  useEffect(() => {
+    if (!sprintsQuery.data || sprintsQuery.data.length === 0) {
+      setSelectedMoveSprintId("");
+      return;
+    }
+    if (!sprintsQuery.data.some((item) => item.id === selectedMoveSprintId)) {
+      setSelectedMoveSprintId(sprintsQuery.data[0].id);
+    }
+  }, [
+    sprintsQuery.data,
+    selectedMoveSprintId
+  ]);
+
+  useEffect(() => {
     setBugQueryResults([]);
+    setSelectedBoardColumnId("");
+    setSelectedMoveSprintId("");
+    setSelectedBoardBugId("");
   }, [
     selectedProjectId
   ]);
@@ -463,7 +547,88 @@ export function Phase1Workbench() {
     onError: (e) => setError(e instanceof Error ? e.message : "Bug query failed")
   });
 
+  const createSprint = useMutation({
+    mutationFn: async () => {
+      if (!token) {
+        throw new Error("Login required");
+      }
+      const parsed = sprintSchema.safeParse({
+        projectId: selectedProjectId,
+        name: sprintName,
+        goal: sprintGoal || undefined,
+        startDate: sprintStartDate,
+        endDate: sprintEndDate
+      });
+      if (!parsed.success) {
+        throw new Error(parsed.error.issues[0]?.message ?? "Invalid sprint");
+      }
+      return api.createSprint(token, {
+        ...parsed.data,
+        startDate: new Date(`${parsed.data.startDate}T00:00:00.000Z`).toISOString(),
+        endDate: new Date(`${parsed.data.endDate}T23:59:59.999Z`).toISOString()
+      });
+    },
+    onSuccess: async (sprint) => {
+      setSprintSuccess(sprint.id);
+      setSelectedMoveSprintId(sprint.id);
+      await queryClient.invalidateQueries({ queryKey: [ "sprints", token, selectedProjectId ] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Sprint creation failed")
+  });
+
+  const createBoardColumn = useMutation({
+    mutationFn: async () => {
+      if (!token) {
+        throw new Error("Login required");
+      }
+      const parsed = boardColumnSchema.safeParse({
+        projectId: selectedProjectId,
+        name: columnName,
+        position: Number(columnPosition),
+        wipLimit: columnWipLimit.trim() ? Number(columnWipLimit) : undefined
+      });
+      if (!parsed.success) {
+        throw new Error(parsed.error.issues[0]?.message ?? "Invalid column");
+      }
+      return api.createBoardColumn(token, parsed.data);
+    },
+    onSuccess: async (column) => {
+      setColumnSuccess(column.id);
+      setSelectedBoardColumnId(column.id);
+      await queryClient.invalidateQueries({ queryKey: [ "columns", token, selectedProjectId ] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Column creation failed")
+  });
+
+  const moveBugOnBoard = useMutation({
+    mutationFn: async () => {
+      if (!token || !selectedBoardBugId || !selectedBoardColumnId) {
+        throw new Error("Select bug and column");
+      }
+      return api.moveBug(token, {
+        bugId: selectedBoardBugId,
+        columnId: selectedBoardColumnId,
+        sprintId: selectedMoveSprintId || undefined
+      });
+    },
+    onSuccess: async (bug) => {
+      setBoardMoveSuccess(`${bug.id}:${bug.columnId ?? "unassigned"}`);
+      await queryClient.invalidateQueries({ queryKey: [ "bugs", token, selectedProjectId ] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Board move failed")
+  });
+
   const selectedProject = useMemo(() => projectsQuery.data?.find((p) => p.id === selectedProjectId) ?? null, [ projectsQuery.data, selectedProjectId ]);
+  const columnBugCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const bug of bugsQuery.data ?? []) {
+      if (!bug.columnId) {
+        continue;
+      }
+      counts.set(bug.columnId, (counts.get(bug.columnId) ?? 0) + 1);
+    }
+    return counts;
+  }, [ bugsQuery.data ]);
   const runCases = useMemo(() => {
     const run = testRunsQuery.data?.find((r: TestRun) => r.id === selectedRunId);
     return run?.results ?? [];
@@ -579,6 +744,61 @@ export function Phase1Workbench() {
                     {item.title} [{item.status}]
                   </div>
                 ))}
+              </div>
+            </article>
+
+            <article className={`rounded-2xl p-6 shadow-soft md:col-span-2 ${panel}`}>
+              <h2 className="mb-4 text-lg font-semibold">Agile: Sprint + Kanban</h2>
+
+              <form data-testid="agile-sprint-form" className="grid gap-3 md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setError(null); createSprint.mutate(); }}>
+                <input data-testid="agile-sprint-name" value={sprintName} onChange={(e) => setSprintName(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <input data-testid="agile-sprint-goal" value={sprintGoal} onChange={(e) => setSprintGoal(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <input data-testid="agile-sprint-start" type="date" value={sprintStartDate} onChange={(e) => setSprintStartDate(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <input data-testid="agile-sprint-end" type="date" value={sprintEndDate} onChange={(e) => setSprintEndDate(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <button data-testid="agile-sprint-submit" type="submit" disabled={!selectedProjectId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-2">Create Sprint</button>
+              </form>
+              {sprintSuccess ? <p data-testid="agile-sprint-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created sprint id: {sprintSuccess}</p> : null}
+
+              <form data-testid="agile-column-form" className="mt-4 grid gap-3 md:grid-cols-3" onSubmit={(e) => { e.preventDefault(); setError(null); createBoardColumn.mutate(); }}>
+                <input data-testid="agile-column-name" value={columnName} onChange={(e) => setColumnName(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <input data-testid="agile-column-position" type="number" min="0" value={columnPosition} onChange={(e) => setColumnPosition(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <input data-testid="agile-column-wip" type="number" min="1" value={columnWipLimit} onChange={(e) => setColumnWipLimit(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`} />
+                <button data-testid="agile-column-submit" type="submit" disabled={!selectedProjectId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-3">Create Kanban Column</button>
+              </form>
+              {columnSuccess ? <p data-testid="agile-column-created-id" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Created column id: {columnSuccess}</p> : null}
+
+              <form data-testid="agile-move-form" className="mt-4 grid gap-3 md:grid-cols-3" onSubmit={(e) => { e.preventDefault(); setError(null); moveBugOnBoard.mutate(); }}>
+                <select data-testid="agile-move-bug" value={selectedBoardBugId} onChange={(e) => setSelectedBoardBugId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                  {(bugsQuery.data ?? []).map((item: Bug) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                </select>
+                <select data-testid="agile-move-column" value={selectedBoardColumnId} onChange={(e) => setSelectedBoardColumnId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                  {(columnsQuery.data ?? []).map((item: BoardColumn) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <select data-testid="agile-move-sprint" value={selectedMoveSprintId} onChange={(e) => setSelectedMoveSprintId(e.target.value)} className={`w-full rounded-xl border px-3 py-2 ${input}`}>
+                  <option value="">No sprint</option>
+                  {(sprintsQuery.data ?? []).map((item: Sprint) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <button data-testid="agile-move-submit" type="submit" disabled={!selectedBoardBugId || !selectedBoardColumnId} className="rounded-xl bg-pine px-4 py-2 text-sm font-semibold text-white md:col-span-3">Move Bug to Column</button>
+              </form>
+              {boardMoveSuccess ? <p data-testid="agile-move-success" className="mt-3 flex items-center gap-2 text-sm"><CheckCircle2 size={16} className="text-pine" />Moved bug: {boardMoveSuccess}</p> : null}
+
+              <div data-testid="agile-board" className="mt-4 grid gap-3 md:grid-cols-3">
+                {(columnsQuery.data ?? []).map((column: BoardColumn) => {
+                  const count = columnBugCounts.get(column.id) ?? 0;
+                  const bugsInColumn = (bugsQuery.data ?? []).filter((bug) => bug.columnId === column.id);
+                  const isWipExceeded = Boolean(column.wipLimit && count > column.wipLimit);
+
+                  return (
+                    <div key={column.id} className={`rounded-xl border p-3 ${input}`}>
+                      <p className="text-sm font-semibold">{column.name}</p>
+                      <p data-testid="agile-column-count" className="text-xs opacity-80">Cards: {count}{column.wipLimit ? ` / WIP ${column.wipLimit}` : ""}</p>
+                      {isWipExceeded ? <p data-testid="agile-wip-warning" className="mt-2 text-xs text-ember">WIP warning: {column.name} exceeds limit</p> : null}
+                      <div className="mt-2 grid gap-2">
+                        {bugsInColumn.map((bug) => <div key={bug.id} data-testid="agile-card" className={`rounded-lg border px-2 py-1 text-xs ${input}`}>{bug.title}</div>)}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </article>
 
