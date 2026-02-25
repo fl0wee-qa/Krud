@@ -138,7 +138,9 @@ Optional integrations:
   - Builds and pushes Docker images to GHCR:
     - `ghcr.io/<owner>/krud-api:latest` (+ `sha-<commit>`)
     - `ghcr.io/<owner>/krud-web:latest` (+ `sha-<commit>`)
-  - Optional deploy hooks:
+- Hosted Deploy (`.github/workflows/deploy-hosted.yml`)
+  - Runs on `main` push or manual dispatch
+  - Triggers hosting provider deploy hooks:
     - `DEPLOY_HOOK_API`
     - `DEPLOY_HOOK_WEB`
 

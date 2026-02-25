@@ -1,4 +1,4 @@
-name: Krud CD
+name: Krud CD (Containers)
 
 on:
   push:
@@ -54,18 +54,3 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  deploy_hooks:
-    runs-on: ubuntu-latest
-    needs: container_publish
-    env:
-      DEPLOY_HOOK_API: ${{ secrets.DEPLOY_HOOK_API }}
-      DEPLOY_HOOK_WEB: ${{ secrets.DEPLOY_HOOK_WEB }}
-    steps:
-      - name: Trigger API deploy hook
-        if: ${{ env.DEPLOY_HOOK_API != '' }}
-        run: curl -fsSL -X POST "$DEPLOY_HOOK_API"
-
-      - name: Trigger WEB deploy hook
-        if: ${{ env.DEPLOY_HOOK_WEB != '' }}
-        run: curl -fsSL -X POST "$DEPLOY_HOOK_WEB"

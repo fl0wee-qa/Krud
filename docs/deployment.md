@@ -10,6 +10,15 @@ This project is full-stack (`Next.js + NestJS + PostgreSQL`), so it should not b
 - Database: managed PostgreSQL (Render, Railway, Neon, Supabase)
 - Domain: custom domain connected to Vercel/Render
 
+## GitHub Secrets (Exact)
+
+Set these in `GitHub -> Repository -> Settings -> Secrets and variables -> Actions`:
+
+- `DEPLOY_HOOK_API`: Deploy hook URL from your API host (Render/Railway)
+- `DEPLOY_HOOK_WEB`: Deploy hook URL from Vercel
+
+Optional GHCR/CD tokens are handled by `GITHUB_TOKEN` in Actions automatically.
+
 ## 1. Push Project to GitHub
 
 If repository is not connected yet:
@@ -51,6 +60,10 @@ Required environment variables:
 - `SLACK_MODE=mock`
 - `GIT_MODE=links`
 
+Reference template:
+
+- `apps/api/.env.production.example`
+
 After first deploy, run migrations and seed once:
 
 ```bash
@@ -72,6 +85,10 @@ Required environment variables:
 
 - `NEXT_PUBLIC_API_URL=https://<your-api-domain>/api`
 
+Reference template:
+
+- `apps/web/.env.production.example`
+
 ## 4. Connect Custom Domain
 
 - Add domain in Vercel (web) and API provider (subdomain for API).
@@ -85,12 +102,20 @@ Required environment variables:
 This repo includes:
 
 - `ci.yml`: lint/build/e2e checks on push and PR
-- `cd.yml`: container build and optional deploy hooks on `main`
+- `cd.yml`: container build + push to GHCR on `main`
+- `deploy-hosted.yml`: triggers hosted deploy hooks on `main`
 
 To auto-trigger provider deploys via hooks, set repository secrets:
 
 - `DEPLOY_HOOK_API`
 - `DEPLOY_HOOK_WEB`
+
+If you use GitHub CLI, you can set them quickly:
+
+```bash
+gh secret set DEPLOY_HOOK_API --body "https://api-host.example.com/deploy-hook"
+gh secret set DEPLOY_HOOK_WEB --body "https://api.vercel.com/v1/integrations/deploy/..."
+```
 
 ## Notes
 
