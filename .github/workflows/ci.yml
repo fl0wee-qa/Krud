@@ -91,6 +91,9 @@ jobs:
       - name: Seed admin user
         run: npm run db:seed
 
+      - name: Build
+        run: npm run build
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
