@@ -110,6 +110,12 @@ body::before {
   transition: background-color 0.35s ease, border-color 0.35s ease, color 0.3s ease, box-shadow 0.35s ease;
 }
 
+.ui-device-frame {
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 28px 80px -56px rgba(15, 23, 42, 0.9);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-fade-up,
   .ui-fade-in {

@@ -872,6 +872,33 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
       coverage
     };
   }, [ bugsQuery.data, columnsQuery.data?.length, selectedProject?.methodology, specCoverageQuery.data, sprintsQuery.data?.length ]);
+  const boardPreview = useMemo(() => {
+    const defaultColumns = [
+      "Backlog",
+      "In Progress",
+      "Review",
+      "Done"
+    ];
+    const columns = (columnsQuery.data ?? []).slice(0, 4).map((col) => col.name);
+    const labels = columns.length > 0 ? columns : defaultColumns;
+    return labels.map((label) => ({
+      label,
+      bugs: (bugsQuery.data ?? []).filter((bug) => {
+        if (!bug.columnId) {
+          return label === labels[0];
+        }
+        const found = (columnsQuery.data ?? []).find((col) => col.id === bug.columnId);
+        return found?.name === label;
+      }).slice(0, 4)
+    }));
+  }, [ bugsQuery.data, columnsQuery.data ]);
+  const activityFeed = useMemo(() => {
+    const bugEvents = (bugsQuery.data ?? []).slice(0, 3).map((bug) => `Bug ${bug.title} moved to ${bug.status}`);
+    const runEvents = (testRunsQuery.data ?? []).slice(0, 2).map((run) => `Run ${run.name} updated`);
+    const specEvents = (specsQuery.data ?? []).slice(0, 2).map((spec) => `Spec ${spec.title} revised`);
+    const events = [ ...bugEvents, ...runEvents, ...specEvents ];
+    return events.length > 0 ? events : [ "No recent activity yet" ];
+  }, [ bugsQuery.data, specsQuery.data, testRunsQuery.data ]);
 
   const logout = () => {
     setToken(null);
@@ -966,6 +993,68 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
                 </span>
               </div>
             </header>
+
+            {user ? (
+              <section className={`rounded-3xl p-3 md:p-4 ui-fade-up ui-stagger-2 ${panel}`}>
+                <div className="grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)_250px]">
+                  <aside className={`rounded-2xl border p-3 ${input}`}>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] opacity-70">Workspace</p>
+                    <div className="grid gap-2">
+                      <button type="button" className={`${ghostButton} !w-full !justify-start`}>Dashboard</button>
+                      <button type="button" className={`${ghostButton} !w-full !justify-start`}>Projects</button>
+                      <button type="button" className={`${ghostButton} !w-full !justify-start`}>Backlog</button>
+                      <button type="button" className={`${ghostButton} !w-full !justify-start`}>Sprint Board</button>
+                      <button type="button" className={`${ghostButton} !w-full !justify-start`}>Reports</button>
+                      <button type="button" className={`${ghostButton} !w-full !justify-start`}>Team</button>
+                    </div>
+                  </aside>
+
+                  <div className="space-y-3">
+                    <div className={`rounded-2xl border p-3 ${input}`}>
+                      <p className="text-sm font-semibold">Projects</p>
+                      <p className="mt-1 text-xs opacity-75">Current sprint board and workload snapshot</p>
+                    </div>
+                    <div className="grid gap-3 xl:grid-cols-4">
+                      {boardPreview.map((column) => (
+                        <article key={column.label} className={`rounded-2xl border p-3 ${input}`}>
+                          <p className="text-xs font-semibold uppercase tracking-wide opacity-75">{column.label}</p>
+                          <div className="mt-2 grid gap-2">
+                            {column.bugs.length > 0 ? column.bugs.map((bug) => (
+                              <div key={bug.id} className={`rounded-xl border p-2 ui-card-hover ${input}`}>
+                                <p className="text-xs font-semibold">{bug.title}</p>
+                                <div className="mt-2 h-1.5 rounded-full bg-slate-300/40">
+                                  <div
+                                    className="h-1.5 rounded-full bg-gradient-to-r from-[#3f6eff] to-[#6f8eff]"
+                                    style={{ width: `${bug.priority === "P1" ? 90 : bug.priority === "P2" ? 70 : 45}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )) : <p className="text-xs opacity-70">No cards</p>}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+
+                  <aside className="space-y-3">
+                    <div className={`rounded-2xl border p-3 ${input}`}>
+                      <p className="text-xs uppercase opacity-70">Velocity</p>
+                      <p className="mt-2 text-2xl font-semibold">{dashboardStats.sprintProgress}%</p>
+                    </div>
+                    <div className={`rounded-2xl border p-3 ${input}`}>
+                      <p className="text-xs uppercase opacity-70">Open Bugs</p>
+                      <p className="mt-2 text-2xl font-semibold">{dashboardStats.openBugs}</p>
+                    </div>
+                    <div className={`rounded-2xl border p-3 ${input}`}>
+                      <p className="mb-2 text-xs uppercase opacity-70">Activity</p>
+                      <div className="grid gap-1">
+                        {activityFeed.map((item, index) => <p key={`${item}-${index}`} className="text-xs opacity-80">{item}</p>)}
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </section>
+            ) : null}
 
             {error ? <div data-testid="form-error" className="ui-fade-in flex items-center gap-2 rounded-2xl border border-red-400/60 bg-red-500/10 px-4 py-3 text-sm text-red-200"><AlertCircle size={16} className="text-red-300" /><p>{error}</p></div> : null}
 
