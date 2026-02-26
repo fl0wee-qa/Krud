@@ -3,23 +3,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   AlertCircle,
+  Bell,
   Bug as BugIcon,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FolderKanban,
   GitBranch,
+  Inbox,
   LayoutDashboard,
   Link2,
   MoonStar,
+  Search,
   ScrollText,
   ShieldCheck,
   SunMedium,
   TestTube2,
   UserRound
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { IntegrationsPanel } from "@/components/workbench/panels/integrations-panel";
 import { ProjectsPanel } from "@/components/workbench/panels/projects-panel";
@@ -174,6 +178,7 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("overview");
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const quickSearchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const t = window.localStorage.getItem(TOKEN_KEY);
@@ -207,6 +212,22 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
   }, [
     initialSection
   ]);
+
+  useEffect(() => {
+    const onKeydown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTyping = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        quickSearchRef.current?.focus();
+      }
+      if (event.key === "Escape" && document.activeElement === quickSearchRef.current) {
+        quickSearchRef.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, []);
 
   const healthQuery = useQuery({ queryKey: [ "health" ], queryFn: api.health });
   const projectsQuery = useQuery({
@@ -403,15 +424,15 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
   ]);
 
   const panel = theme === "light"
-    ? "border border-slate-200/80 bg-white/90 text-slate-900 shadow-[0_22px_40px_-34px_rgba(15,23,42,0.7)] backdrop-blur-xl"
-    : "border border-slate-700/60 bg-slate-900/70 text-slate-100 shadow-[0_30px_58px_-40px_rgba(0,0,0,0.85)] backdrop-blur-xl";
+    ? "border border-slate-200/90 bg-white/85 text-slate-900 shadow-[0_24px_56px_-38px_rgba(15,23,42,0.55)] backdrop-blur-xl ui-theme-transition"
+    : "border border-slate-700/70 bg-slate-900/65 text-slate-100 shadow-[0_34px_72px_-42px_rgba(0,0,0,0.95)] backdrop-blur-xl ui-theme-transition";
   const input = theme === "light"
-    ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#1f883d] focus:outline-none focus:ring-2 focus:ring-[#1f883d]/20"
-    : "border-slate-700 bg-slate-900/80 text-slate-100 placeholder:text-slate-400 focus:border-[#2ea043] focus:outline-none focus:ring-2 focus:ring-[#2ea043]/25";
-  const primaryButton = "inline-flex items-center justify-center rounded-lg bg-[#1f883d] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1a7f37] disabled:cursor-not-allowed disabled:opacity-60";
+    ? "border-slate-300/90 bg-white/90 text-slate-900 placeholder:text-slate-400 focus:border-[#4f7cff] focus:outline-none focus:ring-2 focus:ring-[#4f7cff]/20 ui-theme-transition"
+    : "border-slate-700/90 bg-slate-900/80 text-slate-100 placeholder:text-slate-400 focus:border-[#6f8eff] focus:outline-none focus:ring-2 focus:ring-[#6f8eff]/25 ui-theme-transition";
+  const primaryButton = "inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-[#3f6eff] to-[#6f8eff] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60";
   const ghostButton = theme === "light"
-    ? "inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-100"
-    : "inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:bg-slate-800";
+    ? "inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100"
+    : "inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800";
   const sidebarToggleButton = theme === "light"
     ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
     : "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-200 transition hover:bg-slate-800";
@@ -468,18 +489,18 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
   ]);
 
   const navButton = (id: WorkspaceSection) => theme === "light"
-    ? `inline-flex items-center rounded-lg border text-xs font-semibold uppercase tracking-wide transition ${
+    ? `inline-flex items-center rounded-lg border text-xs font-semibold uppercase tracking-wide transition duration-200 ui-card-hover ${
       collapsedSidebar ? "h-11 w-11 justify-center px-0 py-0" : "w-full justify-start gap-2 px-3 py-2"
     } ${
       activeNavSection === id
-        ? "border-[#1f883d]/50 bg-[#1f883d]/10 text-[#1f883d]"
-        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+        ? "border-[#4f7cff]/55 bg-[#4f7cff]/10 text-[#3159db]"
+        : "border-slate-300 bg-white/90 text-slate-700 hover:bg-slate-100"
     }`
-    : `inline-flex items-center rounded-lg border text-xs font-semibold uppercase tracking-wide transition ${
+    : `inline-flex items-center rounded-lg border text-xs font-semibold uppercase tracking-wide transition duration-200 ui-card-hover ${
       collapsedSidebar ? "h-11 w-11 justify-center px-0 py-0" : "w-full justify-start gap-2 px-3 py-2"
     } ${
       activeNavSection === id
-        ? "border-[#2ea043]/60 bg-[#2ea043]/20 text-[#8ddb95]"
+        ? "border-[#6f8eff]/70 bg-[#6f8eff]/15 text-[#9bb0ff]"
         : "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
     }`;
   const workspaceGridClass = collapsedSidebar
@@ -834,6 +855,23 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
     const run = testRunsQuery.data?.find((r: TestRun) => r.id === selectedRunId);
     return run?.results ?? [];
   }, [ testRunsQuery.data, selectedRunId ]);
+  const dashboardStats = useMemo(() => {
+    const bugs = bugsQuery.data ?? [];
+    const openBugs = bugs.filter((item) => item.status !== "CLOSED").length;
+    const sprintProgress = selectedProject?.methodology === "SCRUM"
+      ? Math.min(100, Math.round(((sprintsQuery.data?.length ?? 0) / 3) * 100))
+      : Math.min(100, Math.round(((columnsQuery.data?.length ?? 0) / 6) * 100));
+    const coverage = specCoverageQuery.data
+      ? (specCoverageQuery.data.totalSpecs > 0
+          ? Math.round((specCoverageQuery.data.coveredSpecs / specCoverageQuery.data.totalSpecs) * 100)
+          : 0)
+      : 0;
+    return {
+      openBugs,
+      sprintProgress,
+      coverage
+    };
+  }, [ bugsQuery.data, columnsQuery.data?.length, selectedProject?.methodology, specCoverageQuery.data, sprintsQuery.data?.length ]);
 
   const logout = () => {
     setToken(null);
@@ -844,11 +882,16 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden px-4 py-6 md:px-8 md:py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(31,136,61,0.15),transparent_38%),radial-gradient(circle_at_92%_10%,rgba(9,105,218,0.12),transparent_40%)]" />
+    <div className="relative min-h-screen overflow-hidden px-4 py-6 md:px-8 md:py-10 ui-theme-transition">
+      <div className={`pointer-events-none absolute inset-0 ${
+        theme === "light"
+          ? "bg-[linear-gradient(106deg,#eef0f6_0%,#eef0f6_47%,#d7dce8_47%,#d7dce8_100%)]"
+          : "bg-[linear-gradient(106deg,#1e2431_0%,#1e2431_47%,#121827_47%,#121827_100%)]"
+      }`} />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_0%,rgba(111,142,255,0.16),transparent_35%),radial-gradient(circle_at_90%_8%,rgba(59,130,246,0.2),transparent_30%)]" />
       <div className="relative mx-auto max-w-7xl">
         <div className={workspaceGridClass}>
-          <aside className={`rounded-2xl md:sticky md:top-6 md:h-[calc(100vh-3rem)] ${collapsedSidebar ? "p-3" : "p-4"} ${panel}`}>
+          <aside className={`rounded-2xl md:sticky md:top-6 md:h-[calc(100vh-3rem)] ui-fade-up ui-stagger-1 ${collapsedSidebar ? "p-3" : "p-4"} ${panel}`}>
             <div className={`${collapsedSidebar ? "mb-4 flex flex-col items-center gap-2" : "mb-4 flex items-center justify-between"}`}>
               <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#1f883d]">{collapsedSidebar ? "KR" : "KRUD NAV"}</p>
               <button type="button" onClick={toggleSidebar} className={sidebarToggleButton} aria-label={collapsedSidebar ? "Expand sidebar" : "Collapse sidebar"}>
@@ -881,43 +924,64 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
           </aside>
 
           <div className="space-y-4 md:space-y-5">
-            <header id="overview" className={`rounded-2xl p-5 md:p-6 ${panel}`}>
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[#1f883d]">KRUD // QAFlow Workbench</p>
-                  <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Auth, Projects, Bugs, Test Cases, Test Runs</h1>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={statusBadge}>API: {healthQuery.data?.status ?? "checking..."}</span>
-                    {selectedProject ? <span className={statusBadge}>Project: {selectedProject.key}</span> : null}
-                    {user ? <span className={statusBadge}>Role: {user.role}</span> : null}
-                    <span className={statusBadge}>
-                      <UserRound size={12} className="inline-block" /> {user ? user.email : "Guest"}
-                    </span>
-                  </div>
+            <header id="overview" className={`rounded-3xl p-4 md:p-5 ui-fade-up ui-stagger-1 ${panel}`}>
+              <div className="flex flex-wrap items-center gap-3 md:gap-4">
+                <div className={`flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border px-3 py-2 ${input}`}>
+                  <Search size={15} className="opacity-70" />
+                  <input
+                    ref={quickSearchRef}
+                    type="text"
+                    value={bugQuery}
+                    onChange={(e) => setBugQuery(e.target.value)}
+                    placeholder="Search tickets, specs, assignees..."
+                    className="w-full border-none bg-transparent text-sm outline-none"
+                  />
+                  <kbd className="rounded border border-current/20 px-1.5 py-0.5 text-[10px] opacity-70">/</kbd>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={toggleTheme} className={ghostButton}>
-                    {theme === "dark" ? <SunMedium size={14} /> : <MoonStar size={14} />}
-                    Theme
-                  </button>
-                  {user ? <button type="button" data-testid="logout-button" onClick={logout} className={ghostButton}>Logout</button> : null}
-                </div>
+                <button type="button" className={ghostButton}><Inbox size={14} />Inbox</button>
+                <button type="button" className={ghostButton}><Bell size={14} />Alerts</button>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                  className={`relative h-11 w-28 rounded-full border p-1 transition ${
+                    theme === "light"
+                      ? "border-slate-300 bg-white/90"
+                      : "border-slate-700 bg-slate-900/90"
+                  }`}
+                >
+                  <span className={`absolute left-2 top-1/2 -translate-y-1/2 ${theme === "light" ? "text-amber-400" : "text-slate-500"}`}><SunMedium size={15} /></span>
+                  <span className={`absolute right-2 top-1/2 -translate-y-1/2 ${theme === "dark" ? "text-indigo-300" : "text-slate-500"}`}><MoonStar size={15} /></span>
+                  <span className={`absolute top-1 h-9 w-9 rounded-full bg-gradient-to-br from-[#4f7cff] to-[#6f8eff] shadow-lg transition-transform ${theme === "dark" ? "translate-x-[52px]" : "translate-x-0"}`} />
+                </button>
+                {user ? <button type="button" data-testid="logout-button" onClick={logout} className={ghostButton}>Logout</button> : null}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[#6f8eff]">KRUD // QAFlow Workbench</p>
+                <span className={statusBadge}>API: {healthQuery.data?.status ?? "checking..."}</span>
+                {selectedProject ? <span className={statusBadge}>Project: {selectedProject.key}</span> : null}
+                {user ? <span className={statusBadge}>Role: {user.role}</span> : null}
+                <span className={statusBadge}>
+                  <UserRound size={12} className="inline-block" /> {user ? user.email : "Guest"}
+                </span>
               </div>
             </header>
 
-            {error ? <div data-testid="form-error" className="flex items-center gap-2 rounded-2xl border border-red-400/60 bg-red-500/10 px-4 py-3 text-sm text-red-200"><AlertCircle size={16} className="text-red-300" /><p>{error}</p></div> : null}
+            {error ? <div data-testid="form-error" className="ui-fade-in flex items-center gap-2 rounded-2xl border border-red-400/60 bg-red-500/10 px-4 py-3 text-sm text-red-200"><AlertCircle size={16} className="text-red-300" /><p>{error}</p></div> : null}
 
         {!user ? (
-          <section className={`rounded-2xl p-5 md:p-6 ${panel}`}>
+          <section className={`rounded-2xl p-5 md:p-6 ui-fade-up ui-stagger-2 ${panel}`}>
             <h2 className={`${sectionTitle} flex items-center gap-2`}><ShieldCheck size={18} className="text-[#1f883d]" />Login</h2>
             <form data-testid="login-form" className="grid gap-3 md:max-w-md" onSubmit={(e) => { e.preventDefault(); setError(null); loginMutation.mutate(); }}>
               <input data-testid="login-email" type="email" placeholder="admin@krud.local" autoComplete="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
               <input data-testid="login-password" type="password" placeholder="Your password" autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm ${input}`} />
-              <button data-testid="login-submit" type="submit" className={primaryButton}>Login</button>
+              <button data-testid="login-submit" type="submit" disabled={loginMutation.isPending} className={primaryButton}>
+                {loginMutation.isPending ? "Signing in..." : "Login"}
+              </button>
             </form>
           </section>
         ) : (
-          <section className="grid gap-4 md:grid-cols-2 md:gap-5">
+          <section className="grid gap-4 md:grid-cols-2 md:gap-5 ui-fade-up ui-stagger-2">
             <SessionPanel panelClass={`rounded-2xl p-5 md:p-6 ${panel}`} sectionTitleClass={sectionTitle} user={user} />
 
             <ProjectsPanel
@@ -1138,14 +1202,34 @@ export function Phase1Workbench({ initialSection = "overview", focused = false }
             </article>
 
             <IntegrationsPanel
-              panelClass={sectionClass("integrations", `rounded-2xl p-5 md:p-6 md:col-span-2 ${panel}`)}
+              panelClass={sectionClass("integrations", `rounded-3xl p-5 md:p-6 md:col-span-2 ${panel}`)}
               sectionTitleClass={sectionTitle}
               inputClass={input}
               endpointGroups={endpointGroups}
             />
           </section>
         )}
-        <footer className={`rounded-2xl p-4 ${panel}`}>
+        {user ? <aside className={`hidden rounded-3xl p-4 xl:block ui-fade-up ui-stagger-3 ${panel}`}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Overview</p>
+              <Activity size={15} className="opacity-70" />
+            </div>
+            <div className={`rounded-2xl border p-3 ${input}`}>
+              <p className="text-xs uppercase opacity-70">Sprint Velocity</p>
+              <p className="mt-2 text-2xl font-semibold">{dashboardStats.sprintProgress}%</p>
+            </div>
+            <div className={`rounded-2xl border p-3 ${input}`}>
+              <p className="text-xs uppercase opacity-70">Spec Coverage</p>
+              <p className="mt-2 text-2xl font-semibold">{dashboardStats.coverage}%</p>
+            </div>
+            <div className={`rounded-2xl border p-3 ${input}`}>
+              <p className="text-xs uppercase opacity-70">Open Bugs</p>
+              <p className="mt-2 text-2xl font-semibold">{dashboardStats.openBugs}</p>
+            </div>
+          </div>
+        </aside> : null}
+        <footer className={`rounded-3xl p-4 ui-fade-up ui-stagger-4 ${panel}`}>
           <p className="text-xs opacity-80">Krud QAFlow - Portfolio First, SaaS Ready - Next.js + NestJS + Prisma + Playwright</p>
         </footer>
       </div>
